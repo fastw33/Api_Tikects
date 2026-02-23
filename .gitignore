@@ -1,0 +1,56 @@
+# =========================
+# 📦 Dependencias
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# ⚙️ Entorno / Config
+# =========================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Archivos temporales
+.DS_Store
+Thumbs.db
+
+# =========================
+# 💾 Archivos y Logs
+# =========================
+logs/
+*.log
+logs/**/*.log
+
+# =========================
+# 📂 Uploads o archivos de usuario
+# =========================
+uploads/
+temp/
+tmp/
+
+# =========================
+# 🧪 Compilaciones / Builds (si luego agregas)
+# =========================
+dist/
+build/
+
+# =========================
+# 🧰 IDE y sistema
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# 🧩 Backups o generados
+# =========================
+*.bak
+*.tmp
+*.old

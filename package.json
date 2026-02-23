@@ -1,0 +1,40 @@
+{
+  "name": "tareas-y-proyectos",
+  "version": "0.1.0",
+  "description": "Backend Tareas y Proyectos",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/server.js",
+    "dev": "nodemon --watch src --ext js,json --exec node src/server.js",
+    "swagger": "node src/swagger.js",
+    "cleanup:chat-uploads": "node src/modules/chats/cleanup.chatUploads.js --run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.2",
+    "morgan": "^1.10.1",
+    "multer": "^1.4.5-lts.2",
+    "pino": "^10.0.0",
+    "sanitize-html": "^2.16.0",
+    "socket.io": "^4.8.1",
+    "swagger-autogen": "^2.23.7",
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10",
+    "pino-pretty": "^13.1.2"
+  }
+}
