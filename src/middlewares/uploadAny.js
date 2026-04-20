@@ -17,16 +17,56 @@ function safeName(name = 'file') {
 }
 
 const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
+  destination: async (req, _file, cb) => {
     // ✅ soporta :ticketId o :id (en tickets usas :id)
     const ticketId = req.params.ticketId || req.params.id
     const chatId = req.params.chatId
+    const isProjectRoute = req.baseUrl?.includes('/projects') || req.path?.includes('/projects')
+    const parentId = req.body?.parent_id
 
     let base = path.join(process.cwd(), 'uploads')
 
-    if (ticketId) base = path.join(base, 'tickets', String(ticketId))
-    else if (chatId) base = path.join(base, 'chats', String(chatId))
-    else base = path.join(base, 'misc')
+    if (isProjectRoute && ticketId) {
+      base = path.join(base, 'projects', String(ticketId))
+      
+      // Si hay parent_id, intentar obtener la ruta de carpetas
+      if (parentId && parentId !== 'null' && parentId !== '') {
+        try {
+          // Importar dinámicamente ProjectRepositoryNode
+          const { ProjectRepositoryNode } = await import('../modules/projects/model.project.js')
+          const mongoose = await import('mongoose')
+          
+          if (mongoose.default.Types.ObjectId.isValid(parentId)) {
+            const folderPath = []
+            let currentId = new mongoose.default.Types.ObjectId(parentId)
+            
+            // Construir la ruta navegando hacia arriba
+            for (let i = 0; i < 10; i++) { // máximo 10 niveles de profundidad
+              const node = await ProjectRepositoryNode.findById(currentId).lean()
+              if (!node) break
+              
+              folderPath.unshift(node.nombre.replace(/[^\w\s\-\.]/g, '_'))
+              
+              if (!node.parent_id) break
+              currentId = node.parent_id
+            }
+            
+            if (folderPath.length > 0) {
+              base = path.join(base, ...folderPath)
+            }
+          }
+        } catch (e) {
+          // Si falla, usar ruta base
+          console.warn('Error construyendo ruta de carpetas:', e.message)
+        }
+      }
+    } else if (ticketId) {
+      base = path.join(base, 'tickets', String(ticketId))
+    } else if (chatId) {
+      base = path.join(base, 'chats', String(chatId))
+    } else {
+      base = path.join(base, 'misc')
+    }
 
     ensureDir(base)
     cb(null, base)

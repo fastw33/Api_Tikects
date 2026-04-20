@@ -167,6 +167,5 @@ TicketSchema.index({ 'asignado_a.tipo': 1, 'asignado_a.id': 1 })
 TicketSchema.index({ orgId: 1, tipo: 1, estado_id: 1 })
 TicketSchema.index({ orgId: 1, tipo: 1, prioridad_id: 1 })
 TicketSchema.index({ tipo: 1, codeSeq: -1 })
-TicketSchema.index({ parent_ticket_id: 1 })
 
 export const Ticket = mongoose.model('Ticket', TicketSchema, 'tickets')

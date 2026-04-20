@@ -12,6 +12,7 @@ import teamsRouter from './modules/teams/routes.team.js'
 import ticketsRouter from './modules/Ticket/routes.ticket.js'
 import chatsRouter from './modules/chats/routes.chat.js'
 import notificationsRouter from './modules/notifications/routes.notification.js'
+import projectsRouter from './modules/projects/routes.project.js'
 
 import notFound from './middlewares/notFound.js'
 import errorHandler from './middlewares/errorHandler.js'
@@ -24,9 +25,16 @@ import './modules/chats/model.conversation.js'
 import './modules/chats/model.message.js'
 import './modules/notifications/model.notification.js'
 import './modules/notifications/model.pushSubscription.js'
+import './modules/projects/model.project.js'
 
 import { authMiddleware } from './config/jwt.js'
 import { buildCors } from './config/corsOptions.js'
+import { serveSecureFile } from './utils/serveFile.js'
+import {
+  createMonitoringRouter,
+  installConsoleCapture,
+  monitoringMiddleware,
+} from './utils/monitoring.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -45,6 +53,8 @@ try {
 
 export function createApp() {
   const app = express()
+  const monitoringBasePath = '/monitoring'
+  installConsoleCapture()
 
   app.set('etag', false)
 
@@ -55,6 +65,12 @@ export function createApp() {
   app.use(helmet())
   app.use(express.json({ limit: '10mb' }))
   app.use(morgan('dev'))
+  app.use(monitoringMiddleware)
+
+  app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'up' })
+  })
+  app.use(monitoringBasePath, createMonitoringRouter(monitoringBasePath))
 
   app.use('/uploads/chats', (req, res) =>
     res.status(404).json({ ok: false, error: 'Not found' })
@@ -83,12 +99,17 @@ export function createApp() {
 
   app.use(API_PREFIX, authMiddleware)
 
+  // Ruta segura para servir archivos (requiere autenticación)
+  // Usamos use() para capturar todas las subrutas
+  app.use(`${API_PREFIX}/secure-file`, serveSecureFile)
+
   app.use(`${API_PREFIX}/areas`, areasRouter)
   app.use(`${API_PREFIX}/catalog`, catalogRouter)
   app.use(`${API_PREFIX}/teams`, teamsRouter)
   app.use(`${API_PREFIX}/tickets`, ticketsRouter)
   app.use(`${API_PREFIX}/chats`, chatsRouter)
   app.use(`${API_PREFIX}/notifications`, notificationsRouter)
+  app.use(`${API_PREFIX}/projects`, projectsRouter)
 
   app.use(notFound)
   app.use(errorHandler)

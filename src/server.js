@@ -6,8 +6,19 @@ import { Server as SocketIOServer } from 'socket.io'
 
 import { createApp } from './app.js'
 import { registerChatSocket } from './modules/chats/socket.chat.js'
+import { recordProcessError } from './utils/monitoring.js'
 
 const PORT = process.env.PORT || 3000
+
+process.on('uncaughtException', err => {
+  recordProcessError(err, 'uncaughtException')
+  console.error('💥 Uncaught Exception atrapada:', err)
+})
+
+process.on('unhandledRejection', reason => {
+  recordProcessError(reason, 'unhandledRejection')
+  console.error('💥 Unhandled Rejection atrapada:', reason)
+})
 
 async function start() {
   try {
