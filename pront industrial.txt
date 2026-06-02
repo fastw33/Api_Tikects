@@ -1,0 +1,528 @@
+PROMPT 0 — CONTEXTO MAESTRO
+
+Actúa como un equipo experto conformado por ingenieros industriales, ingenieros ambientales, auditores HSEQ, especialistas en economía circular, logística industrial, gestión de residuos, recuperación de materiales y desarrollo comercial B2B industrial en Colombia.
+A partir de este momento vas a ayudarme a construir una investigación trazable, profunda y paso a paso sobre cómo distintas industrias en Colombia generan, manejan, entregan, aprovechan, transforman y disponen sus residuos.
+Las industrias iniciales son:
+
+1. Aeronáutica
+2. Minería
+3. Zonas francas y puertos
+4. Aseguradoras y siniestros
+
+La empresa para la que trabajo se dedica a:
+
+- recuperar residuos industriales
+- identificar materiales aprovechables
+- comercializar materiales recuperables
+- gestionar disposición final certificada
+- encontrar oportunidades en residuos metálicos y no metálicos
+
+Objetivo general:
+Investigar de forma ordenada cómo nace, viaja y termina la vida útil de los residuos industriales dentro de cada industria.
+La metodología obligatoria será de MACRO a MICRO:
+
+1. Primero entender la industria.
+2. Luego entender sus procesos.
+3. Luego identificar todos los residuos.
+4. Luego clasificar los residuos.
+5. Luego entender cómo se almacenan.
+6. Luego entender cómo salen de la empresa.
+7. Luego identificar quién los recoge.
+8. Luego identificar quién los transporta.
+9. Luego identificar quién los aprovecha.
+10. Luego identificar quién los trata.
+11. Luego identificar quién les da disposición final.
+12. Luego detectar riesgos legales, ambientales y operativos.
+13. Luego detectar oportunidades comerciales.
+14. Solo al final profundizar en materiales específicos como tungsteno, níquel, cobalto, acero inoxidable 304, acero inoxidable 316, bronce, cobre, aluminio, titanio, carburo de tungsteno y aleaciones especiales.
+    Reglas obligatorias:
+
+- No empieces hablando solo de metales.
+- No saltes etapas.
+- No des respuestas genéricas.
+- No avances al siguiente prompt hasta que yo lo indique.
+- Mantén memoria del contexto durante toda la conversación.
+- Cada respuesta debe estar conectada con la etapa anterior.
+- Si falta información, debes decir qué falta y cómo validarla.
+- Debes pensar como investigador industrial, auditor ambiental y estratega comercial.
+- Debes responder con tablas, flujos, rankings y preguntas de profundización cuando corresponda.
+- Debes enfocarte en Colombia.
+- Debes priorizar información útil para oportunidades comerciales de recuperación, aprovechamiento y disposición final.
+  Tu primera respuesta a este prompt debe ser únicamente una de estas dos opciones:
+
+1. "Instrucción entendida. Estoy listo para continuar con el Prompt 1."
+2. "Instrucción no entendida. Necesito que aclares: [explica qué falta]."
+
+- No desarrolles todavía la investigación.
+- No expliques la metodología.
+- No agregues contenido adicional.
+- Solo confirma si entendiste o no.
+
+PROMPT 1 — ENTENDER LA INDUSTRIA Y SU OPERACIÓN
+
+Industria a investigar:
+[AERONÁUTICA / MINERÍA / ZONAS FRANCAS Y PUERTOS / ASEGURADORAS Y SINIESTROS]
+
+Actúa como un equipo experto conformado por ingenieros industriales, ingenieros ambientales, auditores HSEQ, especialistas en logística industrial y consultores en gestión de residuos industriales en Colombia.
+
+En esta etapa NO debes profundizar todavía en materiales específicos como tungsteno, níquel, cobalto o inoxidables. Primero necesito entender completamente cómo funciona la industria.
+
+Objetivo de esta etapa:
+Construir un entendimiento operacional y trazable de la industria para identificar posteriormente dónde nacen los residuos y cómo fluyen dentro de la operación.
+
+Desarrolla la investigación en el siguiente orden obligatorio:
+
+1. Explica cómo funciona operativamente esta industria en Colombia.
+2. Explica la cadena operativa completa.
+3. Identifica todos los actores que participan:
+   - operadores
+   - contratistas
+   - proveedores
+   - talleres
+   - mantenimiento
+   - logística
+   - almacenamiento
+   - transporte
+   - terceros
+   - gestores externos
+4. Explica las áreas principales de operación.
+5. Explica los procesos principales paso a paso.
+6. Identifica en qué procesos existe:
+   - mantenimiento
+   - desgaste
+   - recambio
+   - reparación
+   - limpieza
+   - almacenamiento
+   - manipulación de químicos
+   - transporte interno
+   - embalaje
+   - operación logística
+   - descarte de activos
+7. Explica qué tipo de residuos podrían empezar a aparecer en cada proceso SIN profundizar todavía en ellos.
+8. Identifica qué procesos parecen más críticos ambientalmente.
+9. Identifica qué procesos parecen generar mayores costos operativos relacionados con residuos.
+10. Identifica qué procesos parecen tener mayores riesgos regulatorios.
+11. Identifica qué procesos probablemente esconden oportunidades comerciales para recuperación, aprovechamiento o disposición final.
+
+IMPORTANTE:
+
+- No profundices todavía en materiales específicos.
+- No hagas todavía análisis metalúrgico.
+- No entres todavía en detalle de valorización.
+- Primero necesito comprender completamente cómo opera la industria.
+- La respuesta debe ser técnica, operacional y trazable.
+- Organiza la respuesta por etapas y procesos.
+- Usa tablas cuando sea necesario.
+- Piensa como investigador industrial y auditor operativo.
+
+Al final entrega obligatoriamente:
+
+1. Mapa operacional de la industria.
+2. Tabla de procesos principales.
+3. Tabla de áreas críticas.
+4. Tabla de posibles puntos de generación de residuos.
+5. Ranking de procesos más importantes para investigar en la siguiente etapa.
+6. Lista de preguntas clave para continuar hacia el Prompt 2.
+
+PROMPT 2 — MAPA TOTAL DE RESIDUOS POR PROCESO
+
+Industria a investigar:
+[AERONÁUTICA / MINERÍA / ZONAS FRANCAS Y PUERTOS / ASEGURADORAS Y SINIESTROS]
+
+Con base en el entendimiento operacional desarrollado en el Prompt 1, ahora vamos a identificar TODOS los residuos que aparecen dentro de la industria.
+
+En esta etapa todavía NO debes profundizar en materiales específicos como tungsteno, níquel, cobalto o inoxidables. Primero necesito el mapa completo de residuos de toda la operación.
+
+Objetivo:
+Construir un mapa total y trazable de residuos por proceso, área y operación dentro de la industria.
+
+Desarrolla la investigación siguiendo este orden:
+
+1. Toma cada proceso identificado en el Prompt 1.
+2. Identifica TODOS los residuos que se generan en cada proceso.
+3. Incluye residuos:
+   - ordinarios
+   - aprovechables
+   - peligrosos RESPEL
+   - especiales
+   - posconsumo
+   - RAEE
+   - orgánicos
+   - químicos
+   - líquidos
+   - sólidos
+   - contaminados
+   - metálicos
+   - no metálicos
+4. Incluye específicamente residuos como:
+   - aceites usados
+   - grasas
+   - filtros
+   - baterías
+   - llantas
+   - trapos contaminados
+   - solventes
+   - pinturas
+   - lodos
+   - empaques contaminados
+   - envases contaminados
+   - madera
+   - plástico
+   - cartón
+   - vidrio
+   - textiles
+   - cauchos
+   - chatarra
+   - piezas fuera de servicio
+   - herramientas dañadas
+   - maquinaria obsoleta
+   - residuos de mantenimiento
+   - residuos de limpieza
+   - residuos logísticos
+   - residuos de operación
+5. Explica para cada residuo:
+   - cómo se genera
+   - en qué área aparece
+   - por qué aparece
+   - frecuencia aproximada
+   - nivel de peligrosidad
+   - impacto operativo
+   - impacto ambiental
+   - impacto legal
+6. Clasifica cada residuo:
+   - ordinario
+   - aprovechable
+   - peligroso
+   - especial
+   - reciclable
+   - contaminado
+   - reutilizable
+   - disposición final
+7. Explica cuáles residuos probablemente:
+   - tienen mayor volumen
+   - generan mayores costos
+   - generan mayores riesgos
+   - ocupan más espacio
+   - requieren mayor control documental
+   - podrían estar mal segregados
+   - podrían esconder valor económico
+8. Explica qué áreas parecen generar mayores problemas de gestión de residuos.
+9. Explica qué residuos parecen más críticos para auditorías ambientales.
+10. Explica qué residuos parecen tener mejor oportunidad comercial para una empresa recuperadora y gestora.
+
+IMPORTANTE:
+
+- No profundices todavía en composición metalúrgica.
+- No entres todavía en valorización detallada de materiales.
+- No profundices todavía en compradores específicos.
+- El objetivo aquí es construir el mapa total de residuos de la industria.
+- La investigación debe ser trazable y organizada por procesos.
+- Debes pensar como auditor industrial y especialista en gestión de residuos.
+
+Al final entrega obligatoriamente:
+
+1. Tabla completa:
+   PROCESO → RESIDUO → CLASIFICACIÓN → RIESGO → OPORTUNIDAD
+2. Ranking de:
+   - residuos más comunes
+   - residuos más peligrosos
+   - residuos más costosos
+   - residuos más problemáticos
+   - residuos potencialmente más valiosos
+3. Mapa de áreas críticas de generación.
+4. Lista de residuos que deben investigarse en profundidad en el Prompt 3.
+
+5. Preguntas clave para continuar la trazabilidad de los residuos en la siguiente etapa.
+   PROMPT 3 — TRAZABILIDAD: CÓMO SE DESHACEN DE LOS RESIDUOS
+
+Industria a investigar:
+[AERONÁUTICA / MINERÍA / ZONAS FRANCAS Y PUERTOS / ASEGURADORAS Y SINIESTROS]
+
+Con base en el mapa total de residuos construido en el Prompt 2, ahora necesito entender cómo cada residuo sale de la empresa y cuál es su ruta hasta el aprovechamiento, tratamiento o disposición final.
+
+Objetivo:
+Construir la trazabilidad completa de los residuos, desde el punto donde nacen hasta su destino final.
+
+Desarrolla la investigación en este orden:
+
+1. Toma cada residuo identificado en el Prompt 2.
+2. Explica cómo se separa o clasifica dentro de la empresa.
+3. Explica cómo se almacena temporalmente.
+4. Explica qué área lo entrega o libera.
+5. Explica quién normalmente lo recoge.
+6. Explica quién lo transporta.
+7. Explica qué tipo de gestor lo recibe.
+8. Explica si el residuo normalmente:
+   - se vende
+   - se dona
+   - se entrega a gestor autorizado
+   - se aprovecha
+   - se recicla
+   - se transforma
+   - se destruye
+   - se incinera
+   - se lleva a relleno sanitario
+   - se lleva a celda de seguridad
+   - se maneja por posconsumo
+   - se exporta
+   - se reutiliza internamente
+9. Explica qué documentos deben acompañar la gestión:
+   - acta de entrega
+   - manifiesto
+   - certificado de aprovechamiento
+   - certificado de tratamiento
+   - certificado de disposición final
+   - registro RESPEL
+   - hoja de seguridad
+   - licencia o permiso del gestor
+   - soporte fotográfico
+   - pesaje
+10. Explica qué riesgos existen si se gestiona mal.
+11. Explica dónde puede perderse valor por mala separación, mezcla o desconocimiento.
+12. Explica qué residuos podrían tener mejor ruta comercial si se gestionan de forma diferente.
+
+IMPORTANTE:
+
+- No profundices todavía en composición metalúrgica.
+- No hagas todavía análisis material por material.
+- No te concentres solo en metales.
+- Analiza todos los residuos del Prompt 2.
+- La respuesta debe mostrar la ruta completa del residuo.
+- Piensa como auditor HSEQ, investigador industrial y especialista en trazabilidad de residuos.
+  Al final entrega obligatoriamente:
+
+1. Tabla:
+   RESIDUO → PUNTO DE GENERACIÓN → ALMACENAMIENTO → SALIDA → TRANSPORTADOR → GESTOR → DESTINO FINAL → DOCUMENTOS
+
+2. Mapa textual de flujo:
+   Generación → Separación → Almacenamiento → Recolección → Transporte → Gestor → Aprovechamiento / Tratamiento / Disposición final
+
+3. Ranking de:
+   - residuos con mayor riesgo de mala gestión
+   - residuos con mayor pérdida de valor
+   - residuos con mayor necesidad de trazabilidad
+   - residuos que deberían ser prioridad comercial
+
+4. Lista de puntos críticos donde una empresa recuperadora puede intervenir.
+
+5. Preguntas clave para continuar hacia el Prompt 4.
+
+PROMPT 4 — FALLAS, PÉRDIDAS DE VALOR Y OPORTUNIDADES COMERCIALES
+
+Industria a investigar:
+[AERONÁUTICA / MINERÍA / ZONAS FRANCAS Y PUERTOS / ASEGURADORAS Y SINIESTROS]
+
+Con base en la trazabilidad construida en el Prompt 3, ahora necesito identificar dónde se pierde valor, dónde hay fallas de gestión y dónde existen oportunidades comerciales para una empresa recuperadora y gestora de residuos industriales.
+
+Objetivo:
+Detectar problemas reales en la gestión de residuos y convertirlos en oportunidades comerciales.
+
+Desarrolla la investigación en este orden:
+
+1. Toma cada residuo analizado en el Prompt 3.
+2. Identifica en qué punto de la cadena puede perder valor:
+   - mala separación
+   - mezcla con otros residuos
+   - contaminación
+   - almacenamiento incorrecto
+   - falta de clasificación
+   - falta de trazabilidad
+   - venta informal
+   - desconocimiento del valor real
+   - mala negociación con gestores
+   - disposición final innecesaria
+3. Identifica qué residuos generan más dolor para el cliente:
+   - altos costos de disposición
+   - riesgo legal
+   - riesgo ambiental
+   - ocupación de espacio
+   - auditorías
+   - baja trazabilidad
+   - proveedores incumplidos
+   - residuos acumulados
+4. Identifica qué residuos podrían convertirse en ingreso para el cliente.
+5. Identifica qué residuos podrían reducir costos si se gestionan mejor.
+6. Identifica qué residuos requieren disposición final certificada.
+7. Identifica qué residuos pueden recuperarse, reciclarse o aprovecharse.
+8. Identifica qué residuos están siendo probablemente mal gestionados.
+9. Identifica qué oportunidades existen para:
+   - recuperación
+   - compra de materiales aprovechables
+   - transporte
+   - clasificación
+   - destrucción certificada
+   - disposición final
+   - auditoría de residuos
+   - separación en fuente
+   - valorización de materiales
+10. Identifica qué cargos dentro de la empresa deberían ser abordados:
+
+- HSEQ
+- ambiental
+- compras
+- mantenimiento
+- operaciones
+- logística
+- almacén
+- gerencia
+- jurídico
+
+IMPORTANTE:
+
+- No profundices todavía material por material.
+- No enfoques todo en metales.
+- Analiza todos los residuos relevantes.
+- Convierte hallazgos técnicos en oportunidades comerciales.
+- Piensa como consultor ambiental, auditor industrial y estratega comercial B2B.
+
+Al final entrega obligatoriamente:
+
+1. Tabla:
+   RESIDUO → FALLA POSIBLE → CONSECUENCIA → OPORTUNIDAD COMERCIAL → SERVICIO A OFRECER
+
+2. Ranking de:
+   - residuos con mayor pérdida de valor
+   - residuos con mayor oportunidad comercial
+   - residuos con mayor riesgo legal
+   - residuos con mayor potencial de ahorro
+   - residuos que podrían convertirse en ingreso
+
+3. Lista de servicios que podría ofrecer una empresa recuperadora.
+
+4. Argumentos comerciales para vender estos servicios.
+
+5. Preguntas clave para continuar hacia el Prompt 5.
+
+PROMPT 5 — AUDITORÍA Y VISITA TÉCNICA DE RESIDUOS
+
+Industria a investigar:
+[AERONÁUTICA / MINERÍA / ZONAS FRANCAS Y PUERTOS / ASEGURADORAS Y SINIESTROS]
+
+Con base en toda la investigación anterior, ahora necesito diseñar una auditoría técnica y comercial para visitar empresas de esta industria y detectar:
+
+- cómo manejan sus residuos
+- dónde tienen fallas
+- dónde pierden valor
+- qué residuos esconden oportunidades comerciales
+- qué materiales podrían recuperarse
+- qué servicios podríamos venderles
+
+Objetivo:
+Construir una metodología de visita técnica capaz de descubrir oportunidades reales de recuperación, aprovechamiento, trazabilidad y disposición final.
+
+La auditoría debe enfocarse en:
+
+- operación real
+- flujo real de residuos
+- puntos críticos
+- acumulación
+- clasificación
+- almacenamiento
+- trazabilidad
+- costos
+- cumplimiento legal
+- oportunidades comerciales
+
+Desarrolla la auditoría por áreas:
+
+1. Operaciones
+2. Producción
+3. Mantenimiento
+4. Talleres
+5. Soldadura
+6. Mecanizado
+7. Limpieza industrial
+8. Almacén
+9. Logística
+10. Compras
+11. HSEQ / ambiental
+12. Seguridad industrial
+13. Contratistas
+14. Patio de residuos
+15. Scrap o chatarrización
+16. Activos fuera de servicio
+17. Bodegas
+18. Zona de químicos
+19. Zona de aceites
+20. Zona de almacenamiento temporal
+
+Para cada área necesito:
+
+1. Qué residuos pueden aparecer.
+2. Qué preguntas deben hacerse.
+3. Qué evidencias deben buscarse.
+4. Qué documentos deben solicitarse.
+5. Qué señales indican mala gestión.
+6. Qué señales indican pérdida de valor.
+7. Qué señales indican oportunidad comercial.
+8. Qué señales indican incumplimiento ambiental.
+9. Qué señales indican mala segregación.
+10. Qué señales indican materiales valiosos ocultos.
+
+La auditoría debe incluir preguntas sobre:
+
+- generación de residuos
+- frecuencia
+- volumen
+- clasificación
+- almacenamiento
+- separación
+- etiquetado
+- transporte
+- gestores
+- certificados
+- trazabilidad
+- emergencias
+- auditorías
+- costos
+- proveedores actuales
+- residuos acumulados
+- residuos problemáticos
+- materiales reutilizables
+- materiales aprovechables
+- activos dados de baja
+- materiales vendidos
+- materiales enviados a disposición final
+- materiales que ocupan espacio
+- residuos difíciles de manejar
+- materiales contaminados
+- materiales mezclados
+- problemas con gestores
+- sanciones o requerimientos ambientales
+
+Además necesito:
+
+1. Cómo identificar visualmente oportunidades.
+2. Cómo detectar residuos escondidos.
+3. Cómo detectar materiales mal clasificados.
+4. Cómo detectar materiales que podrían tener valor.
+5. Cómo detectar residuos que hoy están yéndose a disposición final innecesariamente.
+
+IMPORTANTE:
+
+- Todavía NO profundices en composición metalúrgica específica.
+- Todavía NO hagas análisis profundo de tungsteno, níquel, cobalto o inoxidables.
+- Primero necesito una metodología completa de auditoría industrial de residuos.
+- Piensa como auditor HSEQ, investigador industrial y desarrollador comercial B2B.
+- La respuesta debe ser extremadamente práctica y usable en campo.
+
+Al final entrega obligatoriamente:
+
+1. Checklist completo de visita técnica.
+2. Tabla:
+   ÁREA → RESIDUO POSIBLE → RIESGO → OPORTUNIDAD → EVIDENCIA A BUSCAR
+
+3. Ranking de:
+   - áreas más críticas
+   - residuos más problemáticos
+   - residuos más ocultos
+   - residuos con mayor potencial comercial
+
+4. Lista de documentos que deben solicitarse.
+
+5. Lista de señales de alerta durante una visita.
+
+6. Lista de preguntas clave para detectar oportunidades comerciales reales.
+
+7. Lista de preguntas para continuar hacia el Prompt 6.
