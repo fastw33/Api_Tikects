@@ -76,3 +76,15 @@ export async function readByTarget(req, res) {
     })
   }
 }
+
+export async function createSystem(req, res) {
+  try {
+    const data = await Svc.createSystemNotification(req.body)
+    return res.status(201).json({ ok: true, ...data })
+  } catch (e) {
+    return res.status(e.status || 500).json({
+      ok: false,
+      error: e.message || 'Error creando notificacion del sistema',
+    })
+  }
+}

@@ -204,3 +204,79 @@ export async function dispatchNotifications({
 
   return { created: recipients.length, pushed }
 }
+
+export async function createSystemNotification({
+  actor_id_personal = 'system',
+  to_ids,
+  type,
+  title,
+  body,
+  target,
+  meta = {},
+  dedupeKey,
+  dedupeWindowHours = 48,
+}) {
+  const recipients = [...new Set((to_ids || []).map(x => String(x).trim()))].filter(
+    Boolean
+  )
+
+  if (!recipients.length) {
+    const err = new Error('to_ids debe tener al menos un destinatario.')
+    err.status = 400
+    throw err
+  }
+
+  if (!type || !title || !body || !target?.type) {
+    const err = new Error(
+      'type, title, body y target.type son requeridos para crear la notificacion.'
+    )
+    err.status = 400
+    throw err
+  }
+
+  let recipientsToNotify = recipients
+
+  if (dedupeKey) {
+    const safeWindowHours = Math.max(Number(dedupeWindowHours) || 48, 1)
+    const since = new Date(Date.now() - safeWindowHours * 60 * 60 * 1000)
+    const dedupeKeyValue = String(dedupeKey).trim()
+
+    const results = await Promise.all(
+      recipients.map(async to => {
+        const exists = await Notification.exists({
+          to_id_personal: to,
+          type: String(type).trim(),
+          'meta.dedupeKey': dedupeKeyValue,
+          createdAt: { $gte: since },
+        })
+
+        return { to, exists: Boolean(exists) }
+      })
+    )
+
+    recipientsToNotify = results.filter(item => !item.exists).map(item => item.to)
+  }
+
+  if (!recipientsToNotify.length) {
+    return { created: 0, pushed: 0, skipped: recipients.length }
+  }
+
+  const nextMeta = dedupeKey
+    ? { ...meta, dedupeKey: String(dedupeKey).trim() }
+    : meta
+
+  const result = await dispatchNotifications({
+    actor_id_personal,
+    to_ids: recipientsToNotify,
+    type,
+    title,
+    body,
+    target,
+    meta: nextMeta,
+  })
+
+  return {
+    ...result,
+    skipped: recipients.length - recipientsToNotify.length,
+  }
+}

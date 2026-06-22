@@ -9,6 +9,7 @@ import {
   validateIdParam,
   validateReadOne,
   validateReadAll,
+  validateCreateSystem,
 } from './validator.notification.js'
 
 // Web Push
@@ -35,6 +36,7 @@ router.get('/', validatePaging, validateList, C.list)
 router.get('/count', C.count)
 router.patch('/:id/read', validateIdParam, validateReadOne, C.readOne)
 router.patch('/read-all', validateReadAll, C.readAll)
+router.post('/system', validateCreateSystem, C.createSystem)
 
 // ✅ NUEVO: marcar notificaciones como leídas por ticket
 router.patch('/read-by-ticket', C.readByTicket)
