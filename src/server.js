@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3000
 
 process.on('uncaughtException', err => {
   recordProcessError(err, 'uncaughtException')
-  console.error('💥 Uncaught Exception atrapada:', err)
+  console.error('💥Exception atrapada:', err)
 })
 
 process.on('unhandledRejection', reason => {
