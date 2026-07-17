@@ -1,5 +1,7 @@
 import mongoose from 'mongoose'
 import { Ticket } from '../Ticket/model.ticket.js'
+import { Area } from '../Areas/model.area.js'
+import { Team } from '../teams/model.team.js'
 import {
   Project,
   ProjectTask,
@@ -119,6 +121,57 @@ function isMember(project, id_personal) {
   return (project.miembros || []).some(x => String(x).trim() === pid)
 }
 
+async function resolveAssignedPersonalIds(asignado_a) {
+  const tipo = String(asignado_a?.tipo || '').trim()
+  const id = String(asignado_a?.id || '').trim()
+  if (!tipo || !id) return []
+  if (tipo === 'personal') return [id]
+  if (!mongoose.Types.ObjectId.isValid(id)) return []
+
+  if (tipo === 'area') {
+    const area = await Area.findById(id, { personal_ids: 1 }).lean()
+    return uniq(area?.personal_ids || [])
+  }
+
+  if (tipo === 'team') {
+    const team = await Team.findById(id, { personal_ids: 1 }).lean()
+    return uniq(team?.personal_ids || [])
+  }
+
+  return []
+}
+
+async function buildProjectMembersFromTicket(ticket) {
+  const assignedMembers = await resolveAssignedPersonalIds(ticket?.asignado_a)
+  return uniq([
+    ticket?.creado_por,
+    ...(Array.isArray(ticket?.watchers) ? ticket.watchers : []),
+    ...assignedMembers,
+  ])
+}
+
+async function getUserAssignmentFilters(id_personal) {
+  const pid = String(id_personal || '').trim()
+  if (!pid) return []
+
+  const [areas, teams] = await Promise.all([
+    Area.find({ activo: true, personal_ids: pid }, { _id: 1 }).lean(),
+    Team.find({ activo: true, personal_ids: pid }, { _id: 1 }).lean(),
+  ])
+
+  return [
+    { 'asignado_a.tipo': 'personal', 'asignado_a.id': pid },
+    ...areas.map(area => ({
+      'asignado_a.tipo': 'area',
+      'asignado_a.id': { $in: [area._id, String(area._id)] },
+    })),
+    ...teams.map(team => ({
+      'asignado_a.tipo': 'team',
+      'asignado_a.id': { $in: [team._id, String(team._id)] },
+    })),
+  ]
+}
+
 function normalizeState(v) {
   return String(v || '').trim()
 }
@@ -191,6 +244,8 @@ async function syncProjectsFromTicketsForUser(id_personal) {
   const pid = String(id_personal || '').trim()
   if (!pid) return
 
+  const assignmentFilters = await getUserAssignmentFilters(pid)
+
   const tickets = await Ticket.find({
     tipo: 'proyecto',
     codePrefix: 'PY_',
@@ -198,7 +253,7 @@ async function syncProjectsFromTicketsForUser(id_personal) {
     $or: [
       { creado_por: pid },
       { watchers: pid },
-      { 'asignado_a.tipo': 'personal', 'asignado_a.id': pid },
+      ...assignmentFilters,
     ],
   })
     .select({
@@ -215,11 +270,7 @@ async function syncProjectsFromTicketsForUser(id_personal) {
     .lean()
 
   for (const ticket of tickets) {
-    const miembros = uniq([
-      ticket.creado_por,
-      ...(Array.isArray(ticket.watchers) ? ticket.watchers : []),
-      ticket?.asignado_a?.tipo === 'personal' ? ticket?.asignado_a?.id : '',
-    ])
+    const miembros = await buildProjectMembersFromTicket(ticket)
 
     await Project.findOneAndUpdate(
       { ticket_id: ticket._id },
@@ -271,11 +322,7 @@ export async function createOrSyncProjectFromTicket({
     throw err
   }
 
-  const miembros = uniq([
-    ticket.creado_por,
-    ...(Array.isArray(ticket.watchers) ? ticket.watchers : []),
-    ticket?.asignado_a?.tipo === 'personal' ? ticket?.asignado_a?.id : '',
-  ])
+  const miembros = await buildProjectMembersFromTicket(ticket)
 
   const doc = await Project.findOneAndUpdate(
     { ticket_id: ticket._id },
@@ -410,6 +457,8 @@ export async function listProjects({
 
 export async function getProjectById({ project_id, id_personal }) {
   const pid = String(id_personal || '').trim()
+  await syncProjectsFromTicketsForUser(pid)
+
   const project = await getProjectStrict(
     assertObjectId(project_id, 'project_id')
   )
