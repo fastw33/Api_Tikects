@@ -102,9 +102,9 @@ function toProjectCode(ticket) {
   return `PRO-${String(n || 1).padStart(3, '0')}`
 }
 
-async function getProjectStrict(projectId) {
+async function getProjectStrict(projectId, { includeHidden = false } = {}) {
   const project = await Project.findById(projectId)
-  if (!project || isHiddenProjectState(project.estado)) {
+  if (!project || (!includeHidden && isHiddenProjectState(project.estado))) {
     const err = new Error('Proyecto no encontrado.')
     err.status = 404
     throw err
@@ -127,6 +127,16 @@ const HIDDEN_PROJECT_STATES = ['cerrado', 'Cerrado']
 
 function isHiddenProjectState(v) {
   return HIDDEN_PROJECT_STATES.includes(normalizeState(v))
+}
+
+function parseTraceIndex(value, traces, field = 'traceIndex') {
+  const index = Number(value)
+  if (!Number.isInteger(index) || index < 0 || index >= traces.length) {
+    const err = new Error(`${field} inválido.`)
+    err.status = 400
+    throw err
+  }
+  return index
 }
 
 function normalizeStateKey(v) {
@@ -324,6 +334,7 @@ export async function listProjects({
   search,
   orgId,
   estado,
+  include_closed,
 }) {
   const pid = String(id_personal || '').trim()
   if (!pid) {
@@ -338,14 +349,21 @@ export async function listProjects({
 
   const filter = {
     activo: true,
-    estado: { $nin: HIDDEN_PROJECT_STATES },
     $or: [{ creado_por: pid }, { miembros: pid }],
   }
 
+  const showClosed = String(include_closed || '').toLowerCase() === 'true'
   if (orgId) filter.orgId = String(orgId).trim()
   if (estado) {
     const requestedState = String(estado).trim()
-    filter.estado = isHiddenProjectState(requestedState) ? { $in: [] } : requestedState
+    filter.estado =
+      isHiddenProjectState(requestedState) && !showClosed
+        ? { $in: [] }
+        : requestedState
+  } else {
+    filter.estado = showClosed
+      ? { $in: HIDDEN_PROJECT_STATES }
+      : { $nin: HIDDEN_PROJECT_STATES }
   }
   if (search && String(search).trim()) {
     const q = String(search).trim()
@@ -421,7 +439,8 @@ export async function listProjects({
 export async function getProjectById({ project_id, id_personal }) {
   const pid = String(id_personal || '').trim()
   const project = await getProjectStrict(
-    assertObjectId(project_id, 'project_id')
+    assertObjectId(project_id, 'project_id'),
+    { includeHidden: true }
   )
 
   if (!isMember(project, pid)) {
@@ -889,6 +908,95 @@ export async function addTaskTrace({
   return task.toObject()
 }
 
+export async function patchTaskTrace({
+  project_id,
+  task_id,
+  trace_index,
+  id_personal,
+  payload,
+}) {
+  const actor = String(id_personal || '').trim()
+  const project = await getProjectStrict(
+    assertObjectId(project_id, 'project_id'),
+    { includeHidden: true }
+  )
+  const task = await ProjectTask.findOne({
+    _id: assertObjectId(task_id, 'task_id'),
+    project_id: project._id,
+  })
+
+  if (!task) {
+    const err = new Error('Tarea no encontrada.')
+    err.status = 404
+    throw err
+  }
+
+  if (!isMember(project, actor)) {
+    const err = new Error('Solo miembros pueden editar trazabilidad de la tarea.')
+    err.status = 403
+    throw err
+  }
+
+  const traces = Array.isArray(task.trazabilidad) ? task.trazabilidad : []
+  const index = parseTraceIndex(trace_index, traces)
+  const current = traces[index]
+  const tipo = String(payload?.tipo || current?.tipo || 'estado').trim()
+  const validTipos = ['estado', 'comentario', 'bloqueador', 'progreso']
+
+  if (!validTipos.includes(tipo)) {
+    const err = new Error(`tipo debe ser uno de: ${validTipos.join(', ')}`)
+    err.status = 400
+    throw err
+  }
+
+  const estado = normalizeState(
+    payload?.estado !== undefined ? payload.estado : current?.estado
+  )
+  const nota = String(
+    payload?.nota !== undefined ? payload.nota : current?.nota || ''
+  ).trim()
+
+  if (!nota) {
+    const err = new Error('nota es requerida para trazabilidad.')
+    err.status = 400
+    throw err
+  }
+
+  current.tipo = tipo
+  current.estado = estado
+  current.nota = nota
+  current.changedBy = actor
+  current.changedAt = new Date()
+  task.trazabilidad[index] = current
+
+  if (estado) {
+    task.estado = estado
+    task.closed_at = isClosedLikeState(estado) ? new Date() : null
+  }
+
+  task.updatedBy = actor
+  task.markModified('trazabilidad')
+  await task.save()
+
+  await notifyProject({
+    actor,
+    project,
+    to: projectParticipants(project, [task.assigned_to]),
+    type: 'project.task_trace_updated',
+    title: `Trazabilidad editada en ${task.code}`,
+    body: nota.slice(0, 160),
+    extraTarget: { taskId: String(task._id), taskCode: task.code },
+    meta: {
+      taskId: String(task._id),
+      taskCode: task.code,
+      traceIndex: index,
+      estado,
+    },
+  })
+
+  return task.toObject()
+}
+
 export async function addProjectTrace({
   project_id,
   id_personal,
@@ -986,6 +1094,85 @@ export async function addProjectTrace({
       projectCode: project.code,
       tipo,
       mentions: mentionIds,
+    },
+  })
+
+  return project.toObject()
+}
+
+export async function patchProjectTrace({
+  project_id,
+  trace_index,
+  id_personal,
+  payload,
+}) {
+  const actor = String(id_personal || '').trim()
+  const projectOid = assertObjectId(project_id, 'project_id')
+  const project = await getProjectStrict(projectOid, { includeHidden: true })
+
+  if (!isMember(project, actor)) {
+    const err = new Error('Solo miembros pueden editar trazabilidad del proyecto.')
+    err.status = 403
+    throw err
+  }
+
+  const traces = Array.isArray(project.trazabilidad) ? project.trazabilidad : []
+  const index = parseTraceIndex(trace_index, traces)
+  const current = traces[index]
+  const tipo = String(payload?.tipo || current?.tipo || 'comentario').trim()
+  const validTipos = ['estado', 'comentario', 'hito', 'decision']
+
+  if (!validTipos.includes(tipo)) {
+    const err = new Error(`tipo debe ser uno de: ${validTipos.join(', ')}`)
+    err.status = 400
+    throw err
+  }
+
+  const titulo = String(
+    payload?.titulo !== undefined ? payload.titulo : current?.titulo || ''
+  ).trim()
+  const nota = String(
+    payload?.nota !== undefined ? payload.nota : current?.nota || ''
+  ).trim()
+  const estado = normalizeState(
+    payload?.estado !== undefined ? payload.estado : current?.estado
+  )
+
+  if (!nota && !titulo) {
+    const err = new Error('nota o titulo es requerido para trazabilidad.')
+    err.status = 400
+    throw err
+  }
+
+  current.tipo = tipo
+  current.titulo = titulo
+  current.nota = nota
+  current.estado = tipo === 'estado' ? estado : ''
+  current.changedBy = actor
+  current.changedAt = new Date()
+  project.trazabilidad[index] = current
+
+  if (tipo === 'estado' && estado) {
+    project.estado = estado
+  }
+
+  project.updatedBy = actor
+  project.markModified('trazabilidad')
+  await project.save()
+
+  await notifyProject({
+    actor,
+    project,
+    to: projectParticipants(project),
+    type: 'project.trace_updated',
+    title: `Trazabilidad editada en proyecto ${project.code}`,
+    body: nota.slice(0, 160) || titulo,
+    meta: {
+      projectId: String(project._id),
+      projectCode: project.code,
+      traceIndex: index,
+      tipo,
+      estado,
     },
   })
 
