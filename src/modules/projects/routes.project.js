@@ -8,6 +8,7 @@ router.get('/', C.list)
 router.get('/my-items', C.myItems)
 router.post('/from-ticket', C.createFromTicket)
 router.get('/:id', C.getById)
+router.patch('/:id', C.patchProject)
 router.post('/:id/trazabilidad', uploadAny.any(), C.addProjectTrace)
 
 router.get('/:id/tasks', C.listTasks)

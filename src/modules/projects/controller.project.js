@@ -140,6 +140,19 @@ export async function getById(req, res) {
   }
 }
 
+export async function patchProject(req, res) {
+  try {
+    const project = await ProjectService.patchProject({
+      project_id: req.params.id,
+      id_personal: req.body?.id_personal,
+      payload: req.body,
+    })
+    return res.json({ ok: true, project })
+  } catch (e) {
+    return res.status(e.status || 500).json({ ok: false, error: e.message })
+  }
+}
+
 export async function createTask(req, res) {
   try {
     const adjuntos = getAllAdjuntos(req)

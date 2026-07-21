@@ -104,7 +104,7 @@ function toProjectCode(ticket) {
 
 async function getProjectStrict(projectId) {
   const project = await Project.findById(projectId)
-  if (!project) {
+  if (!project || isHiddenProjectState(project.estado)) {
     const err = new Error('Proyecto no encontrado.')
     err.status = 404
     throw err
@@ -121,6 +121,12 @@ function isMember(project, id_personal) {
 
 function normalizeState(v) {
   return String(v || '').trim()
+}
+
+const HIDDEN_PROJECT_STATES = ['cerrado', 'Cerrado']
+
+function isHiddenProjectState(v) {
+  return HIDDEN_PROJECT_STATES.includes(normalizeState(v))
 }
 
 function normalizeStateKey(v) {
@@ -332,11 +338,15 @@ export async function listProjects({
 
   const filter = {
     activo: true,
+    estado: { $nin: HIDDEN_PROJECT_STATES },
     $or: [{ creado_por: pid }, { miembros: pid }],
   }
 
   if (orgId) filter.orgId = String(orgId).trim()
-  if (estado) filter.estado = String(estado).trim()
+  if (estado) {
+    const requestedState = String(estado).trim()
+    filter.estado = isHiddenProjectState(requestedState) ? { $in: [] } : requestedState
+  }
   if (search && String(search).trim()) {
     const q = String(search).trim()
     filter.$and = [
@@ -443,6 +453,95 @@ export async function getProjectById({ project_id, id_personal }) {
     repository,
     comments,
   }
+}
+
+export async function patchProject({ project_id, id_personal, payload }) {
+  const actor = String(id_personal || '').trim()
+  if (!actor) {
+    const err = new Error('id_personal es requerido.')
+    err.status = 400
+    throw err
+  }
+
+  const project = await getProjectStrict(
+    assertObjectId(project_id, 'project_id')
+  )
+
+  if (!isMember(project, actor)) {
+    const err = new Error('Solo miembros pueden editar el proyecto.')
+    err.status = 403
+    throw err
+  }
+
+  const prev = {
+    titulo: String(project.titulo || ''),
+    descripcion: String(project.descripcion || ''),
+    estado: String(project.estado || ''),
+  }
+
+  const updates = {}
+
+  if (payload?.titulo !== undefined) {
+    const titulo = String(payload.titulo || '').trim()
+    if (!titulo) {
+      const err = new Error('titulo es requerido.')
+      err.status = 400
+      throw err
+    }
+    project.titulo = titulo
+    updates.titulo = titulo
+  }
+
+  if (payload?.descripcion !== undefined) {
+    const descripcion = String(payload.descripcion || '').trim()
+    project.descripcion = descripcion
+    updates.descripcion = descripcion
+  }
+
+  if (payload?.estado !== undefined) {
+    project.estado = normalizeState(payload.estado)
+  }
+
+  const changed =
+    prev.titulo !== String(project.titulo || '') ||
+    prev.descripcion !== String(project.descripcion || '') ||
+    prev.estado !== String(project.estado || '')
+
+  if (!changed) return project.toObject()
+
+  project.trazabilidad.push({
+    tipo: prev.estado !== String(project.estado || '') ? 'estado' : 'comentario',
+    estado: String(project.estado || ''),
+    titulo: 'Proyecto editado',
+    nota: String(payload?.nota || 'Se actualizaron datos generales del proyecto.').trim(),
+    mentions: [],
+    adjuntos: [],
+    changedBy: actor,
+    changedAt: new Date(),
+  })
+
+  project.updatedBy = actor
+  await project.save()
+
+  if (Object.keys(updates).length) {
+    await Ticket.findByIdAndUpdate(project.ticket_id, {
+      $set: {
+        ...updates,
+        updatedBy: actor,
+      },
+    })
+  }
+
+  await notifyProject({
+    actor,
+    project,
+    to: projectParticipants(project),
+    type: 'project.updated',
+    title: `Proyecto ${project.code} editado`,
+    body: `Se actualizaron datos generales de ${project.titulo}`,
+  })
+
+  return project.toObject()
 }
 
 export async function createProjectTask({ project_id, id_personal, payload, adjuntos = [] }) {
@@ -1185,6 +1284,8 @@ export async function myItems({ id_personal, page, limit }) {
   ])
 
   const projects = await Project.find({
+    activo: true,
+    estado: { $nin: HIDDEN_PROJECT_STATES },
     _id: {
       $in: uniq(
         tasks
@@ -1199,25 +1300,24 @@ export async function myItems({ id_personal, page, limit }) {
   const projectMap = Object.fromEntries(projects.map(p => [String(p._id), p]))
 
   return {
-    assigned_tasks: tasks.map(t => ({
-      ...t,
-      project: projectMap[String(t.project_id)] || null,
-    })),
-    mentions: mentions.map(m => ({
-      ...m,
-      project: projectMap[String(m.project_id)] || null,
-    })),
+    assigned_tasks: tasks
+      .filter(t => projectMap[String(t.project_id)])
+      .map(t => ({
+        ...t,
+        project: projectMap[String(t.project_id)],
+      })),
+    mentions: mentions
+      .filter(m => projectMap[String(m.project_id)])
+      .map(m => ({
+        ...m,
+        project: projectMap[String(m.project_id)],
+      })),
   }
 }
 
 export async function listRepoNodes({ project_id }) {
   const pid = assertObjectId(project_id, 'project_id')
-  const project = await Project.findById(pid).lean()
-  if (!project) {
-    const err = new Error('Proyecto no encontrado')
-    err.status = 404
-    throw err
-  }
+  await getProjectStrict(pid)
 
   const nodes = await ProjectRepositoryNode.find({
     project_id: pid,
@@ -1267,7 +1367,7 @@ async function getConsolidatedFiles(project_id) {
 
   // Obtener proyecto con su trazabilidad
   const project = await Project.findById(pid).lean()
-  if (!project) return []
+  if (!project || isHiddenProjectState(project.estado)) return []
 
   const projectFiles = (project.trazabilidad || []).flatMap(t =>
     (t.adjuntos || [])
@@ -1314,12 +1414,7 @@ export async function createRepoNode({
   const pid = assertObjectId(project_id, 'project_id')
   const actor = String(id_personal || '').trim() || 'sistema'
 
-  const project = await Project.findById(pid)
-  if (!project) {
-    const err = new Error('Proyecto no encontrado')
-    err.status = 404
-    throw err
-  }
+  const project = await getProjectStrict(pid)
 
   const {
     parent_id,
