@@ -23,6 +23,10 @@ const ConversationSchema = new Schema(
     contextId: { type: Schema.Types.ObjectId, default: null, index: true }, // ticketId si aplica
 
     title: { type: String, default: '', trim: true }, // solo útil para free
+    avatar_url: { type: String, default: '', trim: true },
+    avatar_fileId: { type: String, default: '', trim: true },
+    avatar_mime: { type: String, default: '', trim: true },
+    avatar_size: { type: Number, default: 0 },
 
     participants: [{ type: String, required: true, trim: true, index: true }], // id_personal
 

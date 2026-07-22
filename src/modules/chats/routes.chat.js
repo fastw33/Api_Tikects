@@ -102,6 +102,53 @@ router.patch(
 )
 
 router.patch(
+  '/:chatId/avatar',
+  validateChatIdParam,
+  uploadAny.single('avatar'),
+  async (req, res) => {
+    const { chatId } = req.params
+    const id_personal = getTokenIdPersonal(req)
+    const file = req.file
+
+    const removeUploaded = async () => {
+      if (!file?.path) return
+      try {
+        await fs.promises.unlink(file.path)
+      } catch {
+        // Si el archivo ya no existe, no hay nada que limpiar.
+      }
+    }
+
+    if (!file) {
+      return res.status(400).json({ ok: false, error: 'avatar es requerido.' })
+    }
+
+    const isImage = String(file.mimetype || '').startsWith('image/')
+    if (!isImage || file.size > 5 * 1024 * 1024) {
+      await removeUploaded()
+      return res.status(400).json({
+        ok: false,
+        error: 'La foto debe ser una imagen de máximo 5MB.',
+      })
+    }
+
+    try {
+      const chat = await ChatController.updateGroupAvatar({
+        chatId,
+        id_personal,
+        file,
+      })
+      return res.json({ ok: true, chat })
+    } catch (e) {
+      await removeUploaded()
+      return res
+        .status(e.status || 500)
+        .json({ ok: false, error: e.message || 'Error guardando foto.' })
+    }
+  }
+)
+
+router.patch(
   '/:chatId/deactivate',
   validateChatIdParam,
   validateDeactivate,
@@ -170,6 +217,39 @@ router.post(
 
 router.get(
   '/:chatId/attachments/:fileId',
+  validateChatIdParam,
+  async (req, res) => {
+    const { chatId, fileId } = req.params
+    const id_personal = req.body?.id_personal || req.query?.id_personal
+    await assertChatParticipant(chatId, id_personal)
+
+    const safeName = path.basename(String(fileId))
+    if (safeName !== String(fileId)) {
+      return res.status(400).json({ ok: false, error: 'fileId inválido.' })
+    }
+
+    const abs = path.resolve(
+      process.cwd(),
+      'uploads',
+      'chats',
+      chatId,
+      safeName
+    )
+
+    try {
+      await fs.promises.stat(abs)
+    } catch {
+      return res
+        .status(404)
+        .json({ ok: false, error: 'Archivo no encontrado.' })
+    }
+
+    return res.sendFile(abs)
+  }
+)
+
+router.get(
+  '/:chatId/avatar/:fileId',
   validateChatIdParam,
   async (req, res) => {
     const { chatId, fileId } = req.params

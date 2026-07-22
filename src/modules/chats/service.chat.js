@@ -278,6 +278,45 @@ export async function patchParticipants({
   return updated
 }
 
+export async function updateGroupAvatar({ chatId, id_personal, file }) {
+  const chat = await assertParticipant(chatId, id_personal)
+  const pid = String(id_personal).trim()
+
+  if (chat.contextType !== 'free' || (chat.participants || []).length < 3) {
+    const err = new Error('Solo los chats grupales pueden tener foto de grupo.')
+    err.status = 400
+    throw err
+  }
+
+  if (String(chat.createdBy || '').trim() !== pid) {
+    const err = new Error('Solo quien creó el grupo puede cambiar la foto.')
+    err.status = 403
+    throw err
+  }
+
+  if (!file) {
+    const err = new Error('avatar es requerido.')
+    err.status = 400
+    throw err
+  }
+
+  const updated = await Conversation.findByIdAndUpdate(
+    chatId,
+    {
+      $set: {
+        avatar_url: `/tikets/chats/${chatId}/avatar/${encodeURIComponent(file.filename)}`,
+        avatar_fileId: file.filename,
+        avatar_mime: file.mimetype || '',
+        avatar_size: file.size || 0,
+        updatedBy: pid,
+      },
+    },
+    { new: true }
+  ).lean()
+
+  return updated
+}
+
 export async function deactivateChat({ chatId, id_personal }) {
   await assertParticipant(chatId, id_personal)
   const pid = String(id_personal).trim()
