@@ -582,6 +582,28 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
     throw err
   }
 
+  const asignado_tipo = String(payload?.asignado_tipo || 'personal').trim()
+  const assigned_to = String(payload?.assigned_to || '').trim()
+  const prioridad_id = String(payload?.prioridad_id || '').trim()
+
+  if (!['personal', 'area', 'team'].includes(asignado_tipo)) {
+    const err = new Error('asignado_tipo debe ser personal, area o team.')
+    err.status = 400
+    throw err
+  }
+
+  if (!assigned_to) {
+    const err = new Error('assigned_to es requerido.')
+    err.status = 400
+    throw err
+  }
+
+  if (!prioridad_id) {
+    const err = new Error('prioridad_id es requerido.')
+    err.status = 400
+    throw err
+  }
+
   const seq = Number(project.nextTaskSeq || 1)
   const code = `${project.code}#T-${String(seq).padStart(3, '0')}`
 
@@ -591,12 +613,12 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
     seq,
     titulo,
     descripcion: String(payload?.descripcion || '').trim(),
-    prioridad_id: String(payload?.prioridad_id || '').trim(),
+    prioridad_id,
     prioridad_label: String(payload?.prioridad_label || '').trim(),
     prioridad_color: String(payload?.prioridad_color || '').trim(),
     estado: normalizeState(payload?.estado || 'abierta'),
-    asignado_tipo: String(payload?.asignado_tipo || 'personal').trim(),
-    assigned_to: String(payload?.assigned_to || '').trim(),
+    asignado_tipo,
+    assigned_to,
     assigned_label: String(payload?.assigned_label || '').trim(),
     due_date: payload?.due_date ? new Date(payload.due_date) : null,
     mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
