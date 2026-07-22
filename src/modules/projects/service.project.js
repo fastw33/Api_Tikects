@@ -705,15 +705,15 @@ export async function patchProjectTask({
     project_id: project._id,
   })
 
-  const prevState = {
-    estado: String(task.estado || ''),
-    assigned_to: String(task.assigned_to || ''),
-  }
-
   if (!task) {
     const err = new Error('Tarea no encontrada.')
     err.status = 404
     throw err
+  }
+
+  const prevState = {
+    estado: String(task.estado || ''),
+    assigned_to: String(task.assigned_to || ''),
   }
 
   const member = isMember(project, pid)
@@ -736,16 +736,20 @@ export async function patchProjectTask({
   const editable = [
     'titulo',
     'descripcion',
-    'prioridad',
+    'prioridad_id',
+    'prioridad_label',
+    'prioridad_color',
     'estado',
+    'asignado_tipo',
     'assigned_to',
+    'assigned_label',
     'due_date',
   ]
   for (const k of editable) {
     if (payload[k] !== undefined) {
       if (k === 'due_date') task[k] = payload[k] ? new Date(payload[k]) : null
       else if (k === 'estado') task[k] = normalizeState(payload[k])
-      else task[k] = payload[k]
+      else task[k] = String(payload[k] || '').trim()
     }
   }
 
