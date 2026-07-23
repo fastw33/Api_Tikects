@@ -174,6 +174,10 @@ export async function patchParticipants(req, res) {
   }
 }
 
+export async function updateGroupAvatar({ chatId, id_personal, file }) {
+  return ChatService.updateGroupAvatar({ chatId, id_personal, file })
+}
+
 export async function deactivateChat(req, res) {
   try {
     const { chatId } = req.params

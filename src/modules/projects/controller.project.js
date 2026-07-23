@@ -140,6 +140,19 @@ export async function getById(req, res) {
   }
 }
 
+export async function patchProject(req, res) {
+  try {
+    const project = await ProjectService.patchProject({
+      project_id: req.params.id,
+      id_personal: req.body?.id_personal,
+      payload: req.body,
+    })
+    return res.json({ ok: true, project })
+  } catch (e) {
+    return res.status(e.status || 500).json({ ok: false, error: e.message })
+  }
+}
+
 export async function createTask(req, res) {
   try {
     const adjuntos = getAllAdjuntos(req)
@@ -196,6 +209,21 @@ export async function addTaskTrace(req, res) {
         mentions: parseMentions(req.body),
       },
       files: adjuntos,
+    })
+    return res.json({ ok: true, task })
+  } catch (e) {
+    return res.status(e.status || 500).json({ ok: false, error: e.message })
+  }
+}
+
+export async function patchTaskTrace(req, res) {
+  try {
+    const task = await ProjectService.patchTaskTrace({
+      project_id: req.params.id,
+      task_id: req.params.taskId,
+      trace_index: req.params.traceIndex,
+      id_personal: req.body?.id_personal,
+      payload: req.body,
     })
     return res.json({ ok: true, task })
   } catch (e) {
@@ -281,6 +309,20 @@ export async function addProjectTrace(req, res) {
         mentions: parseMentions(req.body),
       },
       files: adjuntos,
+    })
+    return res.json({ ok: true, project })
+  } catch (e) {
+    return res.status(e.status || 500).json({ ok: false, error: e.message })
+  }
+}
+
+export async function patchProjectTrace(req, res) {
+  try {
+    const project = await ProjectService.patchProjectTrace({
+      project_id: req.params.id,
+      trace_index: req.params.traceIndex,
+      id_personal: req.body?.id_personal,
+      payload: req.body,
     })
     return res.json({ ok: true, project })
   } catch (e) {
