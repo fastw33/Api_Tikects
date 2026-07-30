@@ -9,6 +9,7 @@ router.get('/my-items', C.myItems)
 router.post('/from-ticket', C.createFromTicket)
 router.get('/:id', C.getById)
 router.patch('/:id', C.patchProject)
+router.patch('/:id/access', C.patchProjectAccess)
 router.patch('/:id/trazabilidad/:traceIndex', C.patchProjectTrace)
 router.post('/:id/trazabilidad', uploadAny.any(), C.addProjectTrace)
 
