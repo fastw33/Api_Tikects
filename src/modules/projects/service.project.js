@@ -357,12 +357,41 @@ async function buildProjectAccessSummary(project, tasks = []) {
     active: true,
   }).lean()
 
+  const grantIds = uniq(grants.map(g => g.id_personal))
+  const grantObjectIds = grantIds.filter(id => mongoose.Types.ObjectId.isValid(id))
+  const [grantAreas, grantTeams] = await Promise.all([
+    grantObjectIds.length
+      ? Area.find({ _id: { $in: grantObjectIds } }, { _id: 1 }).lean()
+      : Promise.resolve([]),
+    grantObjectIds.length
+      ? Team.find({ _id: { $in: grantObjectIds } }, { _id: 1 }).lean()
+      : Promise.resolve([]),
+  ])
+
+  const grantGroupIds = new Set()
+  for (const area of grantAreas) {
+    const id = String(area._id)
+    grantGroupIds.add(id)
+    addAssignmentRef('area', id, 'visualizing', 'grant_area')
+  }
+  for (const team of grantTeams) {
+    const id = String(team._id)
+    grantGroupIds.add(id)
+    addAssignmentRef('team', id, 'visualizing', 'grant_team')
+  }
+
+  const grantPersonalIds = grantIds.filter(id => {
+    const key = String(id || '').trim()
+    if (!key || grantGroupIds.has(key)) return false
+    return !mongoose.Types.ObjectId.isValid(key)
+  })
+
   const taskAssigneeIds = (
     await Promise.all(tasks.map(task => resolveProjectTaskAssigneePersonalIds(task)))
   ).flat()
 
   const visualizingIds = uniq([
-    ...grants.map(g => g.id_personal),
+    ...grantPersonalIds,
     ...taskAssigneeIds,
   ]).filter(id => id && !insideSet.has(String(id)))
 
