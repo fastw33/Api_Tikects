@@ -172,6 +172,183 @@ async function getUserAssignmentFilters(id_personal) {
   ]
 }
 
+async function getUserProjectTaskAssignmentFilters(id_personal) {
+  const pid = String(id_personal || '').trim()
+  if (!pid) return []
+
+  const [areas, teams] = await Promise.all([
+    Area.find({ activo: true, personal_ids: pid }, { _id: 1 }).lean(),
+    Team.find({ activo: true, personal_ids: pid }, { _id: 1 }).lean(),
+  ])
+
+  return [
+    { asignado_tipo: 'personal', assigned_to: pid },
+    ...areas.map(area => ({
+      asignado_tipo: 'area',
+      assigned_to: String(area._id),
+    })),
+    ...teams.map(team => ({
+      asignado_tipo: 'team',
+      assigned_to: String(team._id),
+    })),
+  ]
+}
+
+async function resolveProjectTaskAssigneePersonalIds(task) {
+  const tipo = String(task?.asignado_tipo || 'personal').trim()
+  const id = String(task?.assigned_to || '').trim()
+  if (!id) return []
+  if (tipo === 'personal') return [id]
+  if (!mongoose.Types.ObjectId.isValid(id)) return []
+
+  if (tipo === 'area') {
+    const area = await Area.findById(id, { personal_ids: 1 }).lean()
+    return uniq(area?.personal_ids || [])
+  }
+
+  if (tipo === 'team') {
+    const team = await Team.findById(id, { personal_ids: 1 }).lean()
+    return uniq(team?.personal_ids || [])
+  }
+
+  return []
+}
+
+async function canAccessTaskByAssignment(task, id_personal) {
+  const pid = String(id_personal || '').trim()
+  if (!pid) return false
+  const assignees = await resolveProjectTaskAssigneePersonalIds(task)
+  return assignees.some(x => String(x).trim() === pid)
+}
+
+function projectPreview(project) {
+  if (!project) return null
+  return {
+    _id: project._id,
+    code: project.code,
+    titulo: project.titulo,
+    orgId: project.orgId,
+    estado: project.estado,
+  }
+}
+
+async function ensureTaskAccessGrants({ project, task, actor }) {
+  const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
+  const mentionIds = (task?.mentions || []).map(m => m?.id_personal)
+
+  await Promise.all(
+    uniq([...assigneeIds, ...mentionIds])
+      .filter(id => id && !isMember(project, id))
+      .map(id =>
+        ensureGrant({
+          project_id: project._id,
+          id_personal: id,
+          resource_type: 'task',
+          resource_id: String(task._id),
+          source: assigneeIds.some(x => String(x).trim() === String(id).trim())
+            ? 'assignment'
+            : 'mention',
+          actor,
+        })
+      )
+  )
+}
+
+async function buildProjectAccessSummary(project, tasks = []) {
+  const insideIds = projectParticipants(project)
+  const insideSet = new Set(insideIds.map(String))
+
+  const ticket = project?.ticket_id
+    ? await Ticket.findById(project.ticket_id, { asignado_a: 1 }).lean()
+    : null
+
+  const areas = new Map()
+  const teams = new Map()
+  const addAssignmentRef = (tipo, id, access, source) => {
+    const key = String(id || '').trim()
+    if (!key || !mongoose.Types.ObjectId.isValid(key)) return
+    const item = { id: key, access, sources: [source].filter(Boolean) }
+    const target = tipo === 'area' ? areas : tipo === 'team' ? teams : null
+    if (!target) return
+    const prev = target.get(key)
+    if (prev) {
+      prev.access = prev.access === 'inside' ? 'inside' : access
+      prev.sources = uniq([...(prev.sources || []), source])
+    } else {
+      target.set(key, item)
+    }
+  }
+
+  addAssignmentRef(
+    ticket?.asignado_a?.tipo,
+    ticket?.asignado_a?.id,
+    'inside',
+    'project_assignment'
+  )
+
+  for (const task of tasks) {
+    addAssignmentRef(
+      task?.asignado_tipo,
+      task?.assigned_to,
+      'visualizing',
+      'task_assignment'
+    )
+  }
+
+  const grants = await ProjectAccessGrant.find({
+    project_id: project._id,
+    active: true,
+  }).lean()
+
+  const taskAssigneeIds = (
+    await Promise.all(tasks.map(task => resolveProjectTaskAssigneePersonalIds(task)))
+  ).flat()
+
+  const visualizingIds = uniq([
+    ...grants.map(g => g.id_personal),
+    ...taskAssigneeIds,
+  ]).filter(id => id && !insideSet.has(String(id)))
+
+  const [areaDocs, teamDocs] = await Promise.all([
+    areas.size
+      ? Area.find({ _id: { $in: [...areas.keys()] } }).lean()
+      : Promise.resolve([]),
+    teams.size
+      ? Team.find({ _id: { $in: [...teams.keys()] } }).lean()
+      : Promise.resolve([]),
+  ])
+
+  return {
+    personas: [
+      ...insideIds.map(id => ({ id_personal: String(id), access: 'inside' })),
+      ...visualizingIds.map(id => ({
+        id_personal: String(id),
+        access: 'visualizing',
+      })),
+    ],
+    areas: areaDocs.map(area => ({
+      _id: String(area._id),
+      nombre: area.nombre || area.name || '',
+      personal_ids: area.personal_ids || [],
+      access: areas.get(String(area._id))?.access || 'visualizing',
+      sources: areas.get(String(area._id))?.sources || [],
+    })),
+    teams: teamDocs.map(team => ({
+      _id: String(team._id),
+      nombre: team.nombre || team.name || '',
+      personal_ids: team.personal_ids || [],
+      access: teams.get(String(team._id))?.access || 'visualizing',
+      sources: teams.get(String(team._id))?.sources || [],
+    })),
+    counts: {
+      inside_personas: insideIds.length,
+      visualizing_personas: visualizingIds.length,
+      areas: areas.size,
+      teams: teams.size,
+    },
+  }
+}
+
 function normalizeState(v) {
   return String(v || '').trim()
 }
@@ -498,7 +675,7 @@ export async function getProjectById({ project_id, id_personal }) {
     throw err
   }
 
-  const [tasks, repository, comments] = await Promise.all([
+  const [tasks, repository, comments, accessTasks] = await Promise.all([
     ProjectTask.find({ project_id: project._id })
       .sort({ createdAt: -1 })
       .limit(40)
@@ -513,13 +690,23 @@ export async function getProjectById({ project_id, id_personal }) {
       .sort({ createdAt: -1 })
       .limit(30)
       .lean(),
+    ProjectTask.find({ project_id: project._id })
+      .select({
+        _id: 1,
+        asignado_tipo: 1,
+        assigned_to: 1,
+        mentions: 1,
+      })
+      .lean(),
   ])
+  const accessSummary = await buildProjectAccessSummary(project, accessTasks)
 
   return {
     project: project.toObject(),
     tasks,
     repository,
     comments,
+    accessSummary,
   }
 }
 
@@ -689,32 +876,11 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
   project.updatedBy = actor
   await project.save()
 
-  if (task.assigned_to && !isMember(project, task.assigned_to)) {
-    await ensureGrant({
-      project_id: project._id,
-      id_personal: task.assigned_to,
-      resource_type: 'task',
-      resource_id: String(task._id),
-      source: 'assignment',
-      actor,
-    })
-  }
-
-  for (const m of task.mentions || []) {
-    if (m?.id_personal && !isMember(project, m.id_personal)) {
-      await ensureGrant({
-        project_id: project._id,
-        id_personal: m.id_personal,
-        resource_type: 'task',
-        resource_id: String(task._id),
-        source: 'mention',
-        actor,
-      })
-    }
-  }
+  await ensureTaskAccessGrants({ project, task, actor })
 
   const mentionIds = (task.mentions || []).map(m => m?.id_personal)
-  const notifyTo = projectParticipants(project, [task.assigned_to, ...mentionIds])
+  const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
+  const notifyTo = projectParticipants(project, [...assigneeIds, ...mentionIds])
 
   await notifyProject({
     actor,
@@ -742,20 +908,24 @@ export async function listProjectTasks({ project_id, id_personal }) {
       .lean()
   }
 
-  const grants = await ProjectAccessGrant.find({
-    project_id: project._id,
-    id_personal: pid,
-    resource_type: 'task',
-    active: true,
-  }).lean()
+  const [grants, assignmentFilters] = await Promise.all([
+    ProjectAccessGrant.find({
+      project_id: project._id,
+      id_personal: pid,
+      resource_type: 'task',
+      active: true,
+    }).lean(),
+    getUserProjectTaskAssignmentFilters(pid),
+  ])
 
-  const grantedIds = grants.map(g =>
-    assertObjectId(g.resource_id, 'resource_id')
-  )
+  const grantedIds = grants
+    .map(g => String(g.resource_id || '').trim())
+    .filter(x => mongoose.Types.ObjectId.isValid(x))
+    .map(x => new mongoose.Types.ObjectId(x))
 
   return ProjectTask.find({
     project_id: project._id,
-    $or: [{ assigned_to: pid }, { _id: { $in: grantedIds } }],
+    $or: [...assignmentFilters, { _id: { $in: grantedIds } }],
   })
     .sort({ createdAt: -1 })
     .lean()
@@ -784,11 +954,12 @@ export async function patchProjectTask({
 
   const prevState = {
     estado: String(task.estado || ''),
+    asignado_tipo: String(task.asignado_tipo || 'personal'),
     assigned_to: String(task.assigned_to || ''),
   }
 
   const member = isMember(project, pid)
-  const allowedByAssign = String(task.assigned_to || '').trim() === pid
+  const allowedByAssign = await canAccessTaskByAssignment(task, pid)
 
   if (!member && !allowedByAssign) {
     const granted = await hasGrant({
@@ -829,18 +1000,17 @@ export async function patchProjectTask({
   task.updatedBy = pid
   await task.save()
 
-  if (task.assigned_to && !isMember(project, task.assigned_to)) {
-    await ensureGrant({
-      project_id: project._id,
-      id_personal: task.assigned_to,
-      resource_type: 'task',
-      resource_id: String(task._id),
-      source: 'assignment',
-      actor: pid,
-    })
-  }
+  await ensureTaskAccessGrants({ project, task, actor: pid })
 
-  const notifyTo = projectParticipants(project, [task.assigned_to, prevState.assigned_to])
+  const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
+  const prevAssigneeIds = await resolveProjectTaskAssigneePersonalIds({
+    asignado_tipo: prevState.asignado_tipo,
+    assigned_to: prevState.assigned_to,
+  })
+  const notifyTo = projectParticipants(project, [
+    ...assigneeIds,
+    ...prevAssigneeIds,
+  ])
   const changedState = prevState.estado !== String(task.estado || '')
   const changedAssignee = prevState.assigned_to !== String(task.assigned_to || '')
 
@@ -889,7 +1059,7 @@ export async function addTaskTrace({
   }
 
   const member = isMember(project, actor)
-  const allowedByAssign = String(task.assigned_to || '').trim() === actor
+  const allowedByAssign = await canAccessTaskByAssignment(task, actor)
 
   if (!member && !allowedByAssign) {
     const granted = await hasGrant({
@@ -943,21 +1113,25 @@ export async function addTaskTrace({
 
   await task.save()
 
-  for (const m of mentions) {
-    if (m?.id_personal && !isMember(project, m.id_personal)) {
-      await ensureGrant({
-        project_id: project._id,
-        id_personal: m.id_personal,
-        resource_type: 'task',
-        resource_id: String(task._id),
-        source: 'mention',
-        actor,
-      })
-    }
-  }
+  await ensureTaskAccessGrants({ project, task, actor })
+  await Promise.all(
+    uniq(mentions.map(m => m?.id_personal))
+      .filter(id => id && !isMember(project, id))
+      .map(id =>
+        ensureGrant({
+          project_id: project._id,
+          id_personal: id,
+          resource_type: 'task',
+          resource_id: String(task._id),
+          source: 'mention',
+          actor,
+        })
+      )
+  )
 
   const mentionIds = mentions.map(m => m?.id_personal)
-  const notifyTo = projectParticipants(project, [task.assigned_to, ...mentionIds])
+  const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
+  const notifyTo = projectParticipants(project, [...assigneeIds, ...mentionIds])
 
   await notifyProject({
     actor,
@@ -1525,10 +1699,22 @@ export async function myItems({ id_personal, page, limit }) {
   }
 
   const { safePage, safeLimit, skip } = parsePaging({ page, limit })
+  const [assignmentFilters, taskGrants] = await Promise.all([
+    getUserProjectTaskAssignmentFilters(pid),
+    ProjectAccessGrant.find({
+      id_personal: pid,
+      resource_type: 'task',
+      active: true,
+    }).lean(),
+  ])
+  const grantedTaskIds = taskGrants
+    .map(g => String(g.resource_id || '').trim())
+    .filter(x => mongoose.Types.ObjectId.isValid(x))
+    .map(x => new mongoose.Types.ObjectId(x))
 
   const [tasks, mentions] = await Promise.all([
     ProjectTask.find({
-      assigned_to: pid,
+      $or: [...assignmentFilters, { _id: { $in: grantedTaskIds } }],
       estado: { $nin: ['resuelta', 'cerrada'] },
     })
       .sort({ updatedAt: -1 })
@@ -1557,9 +1743,13 @@ export async function myItems({ id_personal, page, limit }) {
         .filter(x => mongoose.Types.ObjectId.isValid(x))
         .map(x => new mongoose.Types.ObjectId(x)),
     },
-  }).lean()
+  })
+    .select({ _id: 1, code: 1, titulo: 1, orgId: 1, estado: 1 })
+    .lean()
 
-  const projectMap = Object.fromEntries(projects.map(p => [String(p._id), p]))
+  const projectMap = Object.fromEntries(
+    projects.map(p => [String(p._id), projectPreview(p)])
+  )
 
   return {
     assigned_tasks: tasks
@@ -1674,9 +1864,15 @@ export async function createRepoNode({
   file,
 }) {
   const pid = assertObjectId(project_id, 'project_id')
-  const actor = String(id_personal || '').trim() || 'sistema'
+  const actor = String(id_personal || '').trim()
 
   const project = await getProjectStrict(pid)
+
+  if (!isMember(project, actor)) {
+    const err = new Error('Solo miembros del proyecto pueden crear en repositorio.')
+    err.status = 403
+    throw err
+  }
 
   const {
     parent_id,
@@ -1702,7 +1898,11 @@ export async function createRepoNode({
   if (parent_id) {
     parentOid = assertObjectId(parent_id, 'parent_id')
     const parentNode = await ProjectRepositoryNode.findById(parentOid)
-    if (!parentNode || parentNode.type !== 'folder') {
+    if (
+      !parentNode ||
+      parentNode.type !== 'folder' ||
+      String(parentNode.project_id) !== String(pid)
+    ) {
       const err = new Error('El parent_id debe ser una carpeta válida')
       err.status = 400
       throw err

@@ -207,7 +207,7 @@ const ProjectAccessGrantSchema = new Schema(
     id_personal: { type: String, required: true, trim: true, index: true },
     resource_type: {
       type: String,
-      enum: ['task', 'repository_node', 'comment'],
+      enum: ['project', 'task', 'repository_node', 'comment'],
       required: true,
       index: true,
     },
