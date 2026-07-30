@@ -24,6 +24,10 @@ function uniq(arr) {
   return [...new Set((arr || []).map(x => String(x).trim()).filter(Boolean))]
 }
 
+function uniqObjectIds(arr) {
+  return uniq(arr).filter(x => mongoose.Types.ObjectId.isValid(x))
+}
+
 function parsePaging({ page, limit }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100)
   const safePage = Math.max(Number(page) || 1, 1)
@@ -141,12 +145,44 @@ async function resolveAssignedPersonalIds(asignado_a) {
   return []
 }
 
-async function buildProjectMembersFromTicket(ticket) {
+async function resolveGroupPersonalIds({ areaIds = [], teamIds = [] } = {}) {
+  const [areas, teams] = await Promise.all([
+    areaIds.length
+      ? Area.find({ _id: { $in: areaIds } }, { personal_ids: 1 }).lean()
+      : Promise.resolve([]),
+    teamIds.length
+      ? Team.find({ _id: { $in: teamIds } }, { personal_ids: 1 }).lean()
+      : Promise.resolve([]),
+  ])
+
+  return uniq([
+    ...areas.flatMap(area => area?.personal_ids || []),
+    ...teams.flatMap(team => team?.personal_ids || []),
+  ])
+}
+
+function getProjectManualAccess(project) {
+  return {
+    miembros_personal: uniq(project?.miembros_personal || []),
+    miembros_areas: uniqObjectIds(project?.miembros_areas || []),
+    miembros_teams: uniqObjectIds(project?.miembros_teams || []),
+  }
+}
+
+async function buildProjectMembersFromTicket(ticket, manualAccess = {}) {
   const assignedMembers = await resolveAssignedPersonalIds(ticket?.asignado_a)
+  const manualPersonal = uniq(manualAccess.miembros_personal || [])
+  const manualGroupMembers = await resolveGroupPersonalIds({
+    areaIds: uniqObjectIds(manualAccess.miembros_areas || []),
+    teamIds: uniqObjectIds(manualAccess.miembros_teams || []),
+  })
+
   return uniq([
     ticket?.creado_por,
     ...(Array.isArray(ticket?.watchers) ? ticket.watchers : []),
     ...assignedMembers,
+    ...manualPersonal,
+    ...manualGroupMembers,
   ])
 }
 
@@ -257,6 +293,15 @@ async function ensureTaskAccessGrants({ project, task, actor }) {
 async function buildProjectAccessSummary(project, tasks = []) {
   const insideIds = projectParticipants(project)
   const insideSet = new Set(insideIds.map(String))
+  const manualAccess = getProjectManualAccess(project)
+  const personSources = new Map()
+  const addPersonSource = (id, source) => {
+    const key = String(id || '').trim()
+    if (!key) return
+    const current = personSources.get(key) || new Set()
+    current.add(source)
+    personSources.set(key, current)
+  }
 
   const ticket = project?.ticket_id
     ? await Ticket.findById(project.ticket_id, { asignado_a: 1 }).lean()
@@ -264,19 +309,31 @@ async function buildProjectAccessSummary(project, tasks = []) {
 
   const areas = new Map()
   const teams = new Map()
-  const addAssignmentRef = (tipo, id, access, source) => {
+  const addAssignmentRef = (tipo, id, access, source, editable = false) => {
     const key = String(id || '').trim()
     if (!key || !mongoose.Types.ObjectId.isValid(key)) return
-    const item = { id: key, access, sources: [source].filter(Boolean) }
+    const item = { id: key, access, sources: [source].filter(Boolean), editable }
     const target = tipo === 'area' ? areas : tipo === 'team' ? teams : null
     if (!target) return
     const prev = target.get(key)
     if (prev) {
       prev.access = prev.access === 'inside' ? 'inside' : access
       prev.sources = uniq([...(prev.sources || []), source])
+      prev.editable = Boolean(prev.editable || editable)
     } else {
       target.set(key, item)
     }
+  }
+
+  addPersonSource(project?.creado_por, 'creador')
+  for (const id of manualAccess.miembros_personal) addPersonSource(id, 'id_personal')
+
+  for (const areaId of manualAccess.miembros_areas) {
+    addAssignmentRef('area', areaId, 'inside', 'area', true)
+  }
+
+  for (const teamId of manualAccess.miembros_teams) {
+    addAssignmentRef('team', teamId, 'inside', 'team', true)
   }
 
   addAssignmentRef(
@@ -318,12 +375,41 @@ async function buildProjectAccessSummary(project, tasks = []) {
       : Promise.resolve([]),
   ])
 
+  for (const area of areaDocs) {
+    const source = manualAccess.miembros_areas.includes(String(area._id))
+      ? 'area'
+      : 'area_tarea'
+    for (const id of area.personal_ids || []) addPersonSource(id, source)
+  }
+
+  for (const team of teamDocs) {
+    const source = manualAccess.miembros_teams.includes(String(team._id))
+      ? 'team'
+      : 'team_tarea'
+    for (const id of team.personal_ids || []) addPersonSource(id, source)
+  }
+
+  for (const id of insideIds) {
+    if (!personSources.has(String(id))) addPersonSource(id, 'proyecto')
+  }
+
+  for (const id of visualizingIds) {
+    if (!personSources.has(String(id))) addPersonSource(id, 'visualizando')
+  }
+
   return {
     personas: [
-      ...insideIds.map(id => ({ id_personal: String(id), access: 'inside' })),
+      ...insideIds.map(id => ({
+        id_personal: String(id),
+        access: 'inside',
+        sources: [...(personSources.get(String(id)) || new Set(['proyecto']))],
+        editable: manualAccess.miembros_personal.includes(String(id)),
+      })),
       ...visualizingIds.map(id => ({
         id_personal: String(id),
         access: 'visualizing',
+        sources: [...(personSources.get(String(id)) || new Set(['visualizando']))],
+        editable: false,
       })),
     ],
     areas: areaDocs.map(area => ({
@@ -332,6 +418,7 @@ async function buildProjectAccessSummary(project, tasks = []) {
       personal_ids: area.personal_ids || [],
       access: areas.get(String(area._id))?.access || 'visualizing',
       sources: areas.get(String(area._id))?.sources || [],
+      editable: Boolean(areas.get(String(area._id))?.editable),
     })),
     teams: teamDocs.map(team => ({
       _id: String(team._id),
@@ -339,7 +426,9 @@ async function buildProjectAccessSummary(project, tasks = []) {
       personal_ids: team.personal_ids || [],
       access: teams.get(String(team._id))?.access || 'visualizing',
       sources: teams.get(String(team._id))?.sources || [],
+      editable: Boolean(teams.get(String(team._id))?.editable),
     })),
+    manual: manualAccess,
     counts: {
       inside_personas: insideIds.length,
       visualizing_personas: visualizingIds.length,
@@ -463,7 +552,11 @@ async function syncProjectsFromTicketsForUser(id_personal) {
     .lean()
 
   for (const ticket of tickets) {
-    const miembros = await buildProjectMembersFromTicket(ticket)
+    const existingProject = await Project.findOne({ ticket_id: ticket._id })
+      .select({ miembros_personal: 1, miembros_areas: 1, miembros_teams: 1 })
+      .lean()
+    const manualAccess = getProjectManualAccess(existingProject)
+    const miembros = await buildProjectMembersFromTicket(ticket, manualAccess)
 
     await Project.findOneAndUpdate(
       { ticket_id: ticket._id },
@@ -478,6 +571,9 @@ async function syncProjectsFromTicketsForUser(id_personal) {
           updatedBy: pid,
         },
         $setOnInsert: {
+          miembros_personal: [],
+          miembros_areas: [],
+          miembros_teams: [],
           estado: 'abierto',
           nextTaskSeq: 1,
           activo: true,
@@ -515,7 +611,11 @@ export async function createOrSyncProjectFromTicket({
     throw err
   }
 
-  const miembros = await buildProjectMembersFromTicket(ticket)
+  const existingProject = await Project.findOne({ ticket_id: ticket._id })
+    .select({ miembros_personal: 1, miembros_areas: 1, miembros_teams: 1 })
+    .lean()
+  const manualAccess = getProjectManualAccess(existingProject)
+  const miembros = await buildProjectMembersFromTicket(ticket, manualAccess)
 
   const doc = await Project.findOneAndUpdate(
     { ticket_id: ticket._id },
@@ -530,6 +630,9 @@ export async function createOrSyncProjectFromTicket({
         updatedBy: actor,
       },
       $setOnInsert: {
+        miembros_personal: [],
+        miembros_areas: [],
+        miembros_teams: [],
         estado: 'abierto',
         nextTaskSeq: 1,
         activo: true,
@@ -797,6 +900,91 @@ export async function patchProject({ project_id, id_personal, payload }) {
   })
 
   return project.toObject()
+}
+
+export async function patchProjectAccess({ project_id, id_personal, payload }) {
+  const actor = String(id_personal || '').trim()
+  if (!actor) {
+    const err = new Error('id_personal es requerido.')
+    err.status = 400
+    throw err
+  }
+
+  const project = await getProjectStrict(
+    assertObjectId(project_id, 'project_id'),
+    { includeHidden: true }
+  )
+
+  if (!isMember(project, actor)) {
+    const err = new Error('Solo miembros pueden editar el acceso del proyecto.')
+    err.status = 403
+    throw err
+  }
+
+  const miembros_personal = uniq(payload?.miembros_personal || [])
+  const miembros_areas = uniqObjectIds(payload?.miembros_areas || [])
+  const miembros_teams = uniqObjectIds(payload?.miembros_teams || [])
+
+  const [areaCount, teamCount, ticket] = await Promise.all([
+    miembros_areas.length
+      ? Area.countDocuments({ _id: { $in: miembros_areas } })
+      : Promise.resolve(0),
+    miembros_teams.length
+      ? Team.countDocuments({ _id: { $in: miembros_teams } })
+      : Promise.resolve(0),
+    Ticket.findById(project.ticket_id).lean(),
+  ])
+
+  if (areaCount !== miembros_areas.length) {
+    const err = new Error('Una o más áreas no existen.')
+    err.status = 400
+    throw err
+  }
+
+  if (teamCount !== miembros_teams.length) {
+    const err = new Error('Uno o más teams no existen.')
+    err.status = 400
+    throw err
+  }
+
+  if (!ticket) {
+    const err = new Error('Ticket del proyecto no encontrado.')
+    err.status = 404
+    throw err
+  }
+
+  project.miembros_personal = miembros_personal
+  project.miembros_areas = miembros_areas
+  project.miembros_teams = miembros_teams
+  project.miembros = await buildProjectMembersFromTicket(ticket, {
+    miembros_personal,
+    miembros_areas,
+    miembros_teams,
+  })
+  project.updatedBy = actor
+
+  project.trazabilidad.push({
+    tipo: 'comentario',
+    titulo: 'Acceso actualizado',
+    nota: String(payload?.nota || 'Se actualizó el acceso del proyecto.').trim(),
+    mentions: [],
+    adjuntos: [],
+    changedBy: actor,
+    changedAt: new Date(),
+  })
+
+  await project.save()
+
+  await notifyProject({
+    actor,
+    project,
+    to: projectParticipants(project),
+    type: 'project.access_updated',
+    title: `Acceso actualizado en ${project.code}`,
+    body: `Se actualizó quién puede ver el proyecto ${project.titulo}`,
+  })
+
+  return getProjectById({ project_id: project._id, id_personal: actor })
 }
 
 export async function createProjectTask({ project_id, id_personal, payload, adjuntos = [] }) {

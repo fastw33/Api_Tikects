@@ -84,6 +84,9 @@ const ProjectSchema = new Schema(
     descripcion: { type: String, default: '', trim: true },
     creado_por: { type: String, required: true, trim: true, index: true },
     miembros: [{ type: String, trim: true, index: true }],
+    miembros_personal: [{ type: String, trim: true, index: true }],
+    miembros_areas: [{ type: Schema.Types.ObjectId, index: true }],
+    miembros_teams: [{ type: Schema.Types.ObjectId, index: true }],
     estado: {
       type: String,
       default: 'abierto',
