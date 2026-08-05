@@ -128,8 +128,6 @@ export async function listMyChats({
   const [items, total] = await Promise.all([
     Conversation.find(filter)
       .sort({ 'lastMessage.at': -1, updatedAt: -1 })
-      .skip(skip)
-      .limit(safeLimit)
       .lean(),
     Conversation.countDocuments(filter),
   ])
@@ -184,8 +182,10 @@ export async function listMyChats({
     return atB - atA
   })
 
+  const paged = enriched.slice(skip, skip + safeLimit)
+
   return {
-    items: enriched,
+    items: paged,
     meta: {
       total,
       page: safePage,
