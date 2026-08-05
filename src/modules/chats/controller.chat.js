@@ -145,7 +145,11 @@ export async function markRead(req, res) {
       })
     }
 
-    return res.json({ ok: true, lastReadAt: data.lastReadAt })
+    return res.json({
+      ok: true,
+      lastReadAt: data.lastReadAt,
+      lastRead: data.lastRead || {},
+    })
   } catch (e) {
     return res
       .status(e.status || 500)
