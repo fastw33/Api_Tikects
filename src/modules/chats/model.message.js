@@ -24,6 +24,15 @@ const ReplyToSchema = new Schema(
   { _id: false }
 )
 
+const ReactionSchema = new Schema(
+  {
+    emoji: { type: String, required: true, trim: true },
+    id_personal: { type: String, required: true, trim: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+)
+
 const MessageSchema = new Schema(
   {
     chatId: { type: Schema.Types.ObjectId, required: true, index: true },
@@ -46,6 +55,7 @@ const MessageSchema = new Schema(
     attachments: { type: [AttachmentSchema], default: [] },
     replyTo: { type: ReplyToSchema, default: null },
     mentions: { type: [String], default: [] },
+    reactions: { type: [ReactionSchema], default: [] },
 
     editedAt: { type: Date, default: null },
     editedBy: { type: String, default: '', trim: true },

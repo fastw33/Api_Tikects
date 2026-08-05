@@ -2,6 +2,7 @@
 import mongoose from 'mongoose'
 
 const isObjectId = v => mongoose.Types.ObjectId.isValid(v)
+const ALLOWED_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
 
 function isValidIdPersonal(v) {
   return typeof v === 'string' && v.trim().length > 0 && v.trim().length <= 80
@@ -168,6 +169,20 @@ export function validateDeleteMessage(req, res, next) {
 
   if (!id_personal || !isValidIdPersonal(id_personal))
     errors.push('id_personal (actor) es requerido.')
+
+  if (errors.length) return res.status(400).json({ ok: false, errors })
+  next()
+}
+
+export function validateToggleReaction(req, res, next) {
+  const errors = []
+  const { id_personal, emoji } = req.body
+
+  if (!id_personal || !isValidIdPersonal(id_personal))
+    errors.push('id_personal (actor) es requerido.')
+
+  if (!ALLOWED_REACTION_EMOJIS.includes(String(emoji || '').trim()))
+    errors.push('emoji debe ser una reacción válida.')
 
   if (errors.length) return res.status(400).json({ ok: false, errors })
   next()

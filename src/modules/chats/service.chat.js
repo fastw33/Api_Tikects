@@ -3,6 +3,8 @@ import { Conversation } from './model.conversation.js'
 import { Message } from './model.message.js'
 import { encryptText, decryptText } from './crypto.message.js'
 
+const ALLOWED_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
 function uniqTrim(arr) {
   return [...new Set(arr.map(x => String(x).trim()))].filter(Boolean)
 }
@@ -506,6 +508,58 @@ export async function deleteMessage({ chatId, messageId, id_personal }) {
   })
 
   return { messageId: String(messageId), lastMessage }
+}
+
+export async function toggleReaction({
+  chatId,
+  messageId,
+  id_personal,
+  emoji,
+}) {
+  await assertParticipant(chatId, id_personal)
+  const pid = String(id_personal).trim()
+  const cleanEmoji = String(emoji || '').trim()
+
+  if (!ALLOWED_REACTION_EMOJIS.includes(cleanEmoji)) {
+    const err = new Error('Reacción inválida.')
+    err.status = 400
+    throw err
+  }
+
+  const message = await Message.findOne({ _id: messageId, chatId })
+  if (!message) {
+    const err = new Error('Mensaje no encontrado.')
+    err.status = 404
+    throw err
+  }
+
+  const existing = Array.isArray(message.reactions) ? message.reactions : []
+  const previous = existing.find(r => String(r.id_personal || '') === pid)
+  const shouldRemove = previous && String(previous.emoji || '') === cleanEmoji
+
+  message.reactions = existing
+    .filter(r => String(r.id_personal || '') !== pid)
+    .map(r => ({
+      emoji: r.emoji,
+      id_personal: r.id_personal,
+      createdAt: r.createdAt || new Date(),
+    }))
+
+  if (!shouldRemove) {
+    message.reactions.push({
+      emoji: cleanEmoji,
+      id_personal: pid,
+      createdAt: new Date(),
+    })
+  }
+
+  const saved = await message.save()
+  const out = saved.toObject()
+
+  return {
+    ...out,
+    text: decryptText(out),
+  }
 }
 
 export async function markRead({ chatId, id_personal, at }) {
