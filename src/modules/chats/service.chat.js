@@ -2,7 +2,6 @@ import mongoose from 'mongoose'
 import { Conversation } from './model.conversation.js'
 import { Message } from './model.message.js'
 import { encryptText, decryptText } from './crypto.message.js'
-import { dispatchNotifications } from '../notifications/service.notification.js'
 
 function uniqTrim(arr) {
   return [...new Set(arr.map(x => String(x).trim()))].filter(Boolean)
@@ -72,6 +71,54 @@ function buildMessagePreview({ text = '', attachments = [] } = {}) {
     return name ? `Adjunto: ${name}` : 'Adjunto'
   }
   return `${files.length} adjuntos`
+}
+
+function dayBounds(dateValue) {
+  const raw = String(dateValue || '').trim()
+  if (!raw) return null
+  const date = new Date(`${raw.slice(0, 10)}T00:00:00.000`)
+  if (Number.isNaN(date.getTime())) return null
+  const next = new Date(date)
+  next.setDate(date.getDate() + 1)
+  return { from: date, to: next }
+}
+
+function normalizeMentionIds({ mentions, participants, senderId }) {
+  const allowed = new Set(
+    (participants || [])
+      .map(p => String(p || '').trim())
+      .filter(p => p && p !== senderId)
+  )
+  return uniqTrim(Array.isArray(mentions) ? mentions : []).filter(id =>
+    allowed.has(id)
+  )
+}
+
+async function buildReplyTo(chatId, replyToMessageId) {
+  const id = String(replyToMessageId || '').trim()
+  if (!id) return null
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    const err = new Error('replyToMessageId inválido.')
+    err.status = 400
+    throw err
+  }
+
+  const original = await Message.findOne({ _id: id, chatId }).lean()
+  if (!original) {
+    const err = new Error('El mensaje a responder no existe en este chat.')
+    err.status = 404
+    throw err
+  }
+
+  return {
+    messageId: original._id,
+    sender_id_personal: original.sender_id_personal || '',
+    preview: buildMessagePreview({
+      text: decryptText(original),
+      attachments: original.attachments,
+    }),
+    createdAt: original.createdAt || null,
+  }
 }
 
 async function assertParticipant(chatId, id_personal) {
@@ -209,18 +256,75 @@ export async function listMyChats({
   }
 }
 
-export async function getMessages({ chatId, id_personal, page, limit }) {
+export async function getMessages({
+  chatId,
+  id_personal,
+  page,
+  limit,
+  search,
+  sender_id_personal,
+  date,
+  from,
+  to,
+}) {
   const chat = await assertParticipant(chatId, id_personal)
 
   const { safePage, safeLimit, skip } = parsePaging({ page, limit })
+  const cleanSearch = String(search || '').trim().toLowerCase()
+  const senderFilter = String(sender_id_personal || '').trim()
+  const day = dayBounds(date)
+  const createdAt = {}
+  const fromDate = from ? new Date(from) : day?.from
+  const toDate = to ? new Date(to) : day?.to
+
+  if (fromDate && !Number.isNaN(fromDate.getTime())) createdAt.$gte = fromDate
+  if (toDate && !Number.isNaN(toDate.getTime())) createdAt.$lt = toDate
+
+  const filter = { chatId }
+  if (senderFilter) filter.sender_id_personal = senderFilter
+  if (Object.keys(createdAt).length) filter.createdAt = createdAt
+
+  if (cleanSearch) {
+    const allItems = await Message.find(filter).sort({ createdAt: -1 }).lean()
+    const filtered = allItems
+      .map(m => ({
+        ...m,
+        text: decryptText(m),
+      }))
+      .filter(m => {
+        const haystack = [
+          m.text,
+          m.preview,
+          m.sender_id_personal,
+          ...(Array.isArray(m.attachments) ? m.attachments.map(a => a.name) : []),
+        ]
+          .join(' ')
+          .toLowerCase()
+        return haystack.includes(cleanSearch)
+      })
+
+    const total = filtered.length
+    const paged = filtered.slice(skip, skip + safeLimit)
+
+    return {
+      items: paged,
+      lastRead: normalizeLastRead(chat.lastRead),
+      meta: {
+        total,
+        page: safePage,
+        limit: safeLimit,
+        pages: Math.ceil(total / safeLimit) || 1,
+      },
+    }
+  }
 
   const [items, total] = await Promise.all([
-    Message.find({ chatId })
+    Message.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit)
       .lean(),
-    Message.countDocuments({ chatId }),
+    Message.countDocuments(filter),
   ])
 
   const decrypted = items.map(m => ({
@@ -245,11 +349,19 @@ export async function sendMessage({
   id_personal,
   text,
   attachments = [],
+  replyToMessageId,
+  mentions = [],
 }) {
   const chat = await assertParticipant(chatId, id_personal)
   const pid = String(id_personal).trim()
 
   const preview = buildMessagePreview({ text, attachments })
+  const replyTo = await buildReplyTo(chatId, replyToMessageId)
+  const mentionIds = normalizeMentionIds({
+    mentions,
+    participants: chat.participants,
+    senderId: pid,
+  })
 
   const enc = encryptText(text)
 
@@ -259,6 +371,8 @@ export async function sendMessage({
     ...enc,
     preview,
     attachments: Array.isArray(attachments) ? attachments : [],
+    replyTo,
+    mentions: mentionIds,
   })
 
   await Conversation.findByIdAndUpdate(chatId, {
@@ -272,33 +386,6 @@ export async function sendMessage({
     ...msg.toObject(),
     text: decryptText(msg.toObject()),
   }
-
-  const recipients = (chat.participants || []).filter(
-    p => String(p).trim() && String(p).trim() !== pid
-  )
-
-  const ticketId =
-    chat.contextType === 'ticket' && chat.contextId
-      ? String(chat.contextId)
-      : null
-
-  await dispatchNotifications({
-    orgId: null,
-    to_ids_personal: recipients,
-    createdBy: pid,
-    type: 'chat.message',
-    title: 'Nuevo mensaje',
-    body: preview,
-    target: {
-      type: 'chat',
-      params: { chatId: String(chatId), ...(ticketId ? { ticketId } : {}) },
-      url: `/chats/${String(chatId)}`,
-    },
-    meta: {
-      chatId: String(chatId),
-      ...(ticketId ? { ticketId } : {}),
-    },
-  })
 
   return messageOut
 }

@@ -89,10 +89,19 @@ export function validateCreateFreeChat(req, res, next) {
 
 export function validateGetMessages(req, res, next) {
   const errors = []
-  const { id_personal } = req.query
+  const { id_personal, sender_id_personal, date, from, to } = req.query
 
   if (!id_personal || !isValidIdPersonal(id_personal))
     errors.push('id_personal (query) es requerido.')
+
+  if (sender_id_personal !== undefined && !isValidIdPersonal(sender_id_personal))
+    errors.push('sender_id_personal inválido.')
+
+  for (const [key, value] of Object.entries({ date, from, to })) {
+    if (value === undefined) continue
+    const d = new Date(String(value))
+    if (Number.isNaN(d.getTime())) errors.push(`${key} debe ser una fecha válida.`)
+  }
 
   if (errors.length) return res.status(400).json({ ok: false, errors })
   next()
@@ -100,7 +109,8 @@ export function validateGetMessages(req, res, next) {
 
 export function validateSendMessage(req, res, next) {
   const errors = []
-  const { id_personal, text, attachments } = req.body
+  const { id_personal, text, attachments, replyToMessageId, mentions } =
+    req.body
 
   if (!id_personal || !isValidIdPersonal(id_personal))
     errors.push('id_personal (actor) es requerido.')
@@ -121,6 +131,17 @@ export function validateSendMessage(req, res, next) {
         }
       }
     }
+  }
+
+  if (replyToMessageId !== undefined && replyToMessageId !== null) {
+    if (!isObjectId(replyToMessageId))
+      errors.push('replyToMessageId debe ser ObjectId válido.')
+  }
+
+  if (mentions !== undefined) {
+    if (!Array.isArray(mentions)) errors.push('mentions debe ser array.')
+    else if (mentions.some(x => !isValidIdPersonal(x)))
+      errors.push('mentions contiene id_personal inválidos.')
   }
 
   if (errors.length) return res.status(400).json({ ok: false, errors })
