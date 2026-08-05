@@ -15,6 +15,36 @@ function parsePaging({ page, limit }) {
   return { safePage, safeLimit, skip }
 }
 
+function normalizeLastRead(lastRead) {
+  if (!lastRead) return {}
+
+  const source =
+    lastRead instanceof Map
+      ? Object.fromEntries(lastRead.entries())
+      : typeof lastRead.toObject === 'function'
+        ? lastRead.toObject()
+        : lastRead
+
+  return Object.fromEntries(
+    Object.entries(source || {})
+      .map(([id, value]) => {
+        const pid = String(id || '').trim()
+        const d = new Date(value)
+        if (!pid || Number.isNaN(d.getTime())) return null
+        return [pid, d.toISOString()]
+      })
+      .filter(Boolean)
+  )
+}
+
+function getLastReadAt(lastRead, id_personal) {
+  const pid = String(id_personal || '').trim()
+  const value = normalizeLastRead(lastRead)[pid]
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
 async function assertParticipant(chatId, id_personal) {
   const chat = await Conversation.findById(chatId).lean()
   if (!chat) {
@@ -91,7 +121,8 @@ export async function listMyChats({
 
   const enriched = await Promise.all(
     items.map(async c => {
-      const lastReadAt = c.lastRead?.[pid] ? new Date(c.lastRead[pid]) : null
+      const lastRead = normalizeLastRead(c.lastRead)
+      const lastReadAt = getLastReadAt(lastRead, pid)
 
       const msgFilter = {
         chatId: c._id,
@@ -104,6 +135,7 @@ export async function listMyChats({
 
       return {
         ...c,
+        lastRead,
         participantsCount: c.participants?.length || 0,
         unreadCount,
         lastReadAt,
@@ -123,7 +155,7 @@ export async function listMyChats({
 }
 
 export async function getMessages({ chatId, id_personal, page, limit }) {
-  await assertParticipant(chatId, id_personal)
+  const chat = await assertParticipant(chatId, id_personal)
 
   const { safePage, safeLimit, skip } = parsePaging({ page, limit })
 
@@ -143,6 +175,7 @@ export async function getMessages({ chatId, id_personal, page, limit }) {
 
   return {
     items: decrypted,
+    lastRead: normalizeLastRead(chat.lastRead),
     meta: {
       total,
       page: safePage,
@@ -217,19 +250,24 @@ export async function sendMessage({
 }
 
 export async function markRead({ chatId, id_personal, at }) {
-  const chat = await assertParticipant(chatId, id_personal)
+  await assertParticipant(chatId, id_personal)
   const pid = String(id_personal).trim()
 
-  const lastReadAt = at ? new Date(at) : new Date()
+  const parsedAt = at ? new Date(at) : new Date()
+  const lastReadAt = Number.isNaN(parsedAt.getTime()) ? new Date() : parsedAt
 
-  await Conversation.findByIdAndUpdate(chatId, {
-    $set: {
-      [`lastRead.${pid}`]: lastReadAt,
-      updatedBy: pid,
+  const chat = await Conversation.findByIdAndUpdate(
+    chatId,
+    {
+      $set: {
+        [`lastRead.${pid}`]: lastReadAt,
+        updatedBy: pid,
+      },
     },
-  })
+    { new: true }
+  ).lean()
 
-  return { lastReadAt, chat }
+  return { lastReadAt, lastRead: normalizeLastRead(chat?.lastRead), chat }
 }
 
 export async function patchParticipants({
