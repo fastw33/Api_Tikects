@@ -12,6 +12,7 @@ import {
   validateSendMessage,
   validateEditMessage,
   validateDeleteMessage,
+  validateToggleReaction,
   validatePatchRead,
   validatePatchParticipants,
   validateDeactivate,
@@ -116,6 +117,14 @@ router.patch(
   validateMessageIdParam,
   validateEditMessage,
   ChatController.editMessage
+)
+
+router.patch(
+  '/:chatId/messages/:messageId/reaction',
+  validateChatIdParam,
+  validateMessageIdParam,
+  validateToggleReaction,
+  ChatController.toggleReaction
 )
 
 router.delete(

@@ -195,6 +195,31 @@ export async function deleteMessage(req, res) {
   }
 }
 
+export async function toggleReaction(req, res) {
+  try {
+    const { chatId, messageId } = req.params
+    const message = await ChatService.toggleReaction({
+      chatId,
+      messageId,
+      ...req.body,
+    })
+
+    const io = globalThis.__io
+    if (io) {
+      io.to(String(chatId)).emit('chat:message:update', {
+        chatId,
+        message,
+      })
+    }
+
+    return res.json({ ok: true, message })
+  } catch (e) {
+    return res
+      .status(e.status || 500)
+      .json({ ok: false, error: e.message || 'Error guardando reacción' })
+  }
+}
+
 export async function markRead(req, res) {
   try {
     const { chatId } = req.params
