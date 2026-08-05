@@ -34,6 +34,9 @@ const MessageSchema = new Schema(
     preview: { type: String, default: '' },
 
     attachments: { type: [AttachmentSchema], default: [] },
+
+    editedAt: { type: Date, default: null },
+    editedBy: { type: String, default: '', trim: true },
   },
   { timestamps: true }
 )

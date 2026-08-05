@@ -131,6 +131,57 @@ export async function sendMessage(req, res) {
   }
 }
 
+export async function editMessage(req, res) {
+  try {
+    const { chatId, messageId } = req.params
+    const message = await ChatService.editMessage({
+      chatId,
+      messageId,
+      ...req.body,
+    })
+
+    const io = globalThis.__io
+    if (io) {
+      io.to(String(chatId)).emit('chat:message:update', {
+        chatId,
+        message,
+      })
+    }
+
+    return res.json({ ok: true, message })
+  } catch (e) {
+    return res
+      .status(e.status || 500)
+      .json({ ok: false, error: e.message || 'Error editando mensaje' })
+  }
+}
+
+export async function deleteMessage(req, res) {
+  try {
+    const { chatId, messageId } = req.params
+    const data = await ChatService.deleteMessage({
+      chatId,
+      messageId,
+      ...req.body,
+    })
+
+    const io = globalThis.__io
+    if (io) {
+      io.to(String(chatId)).emit('chat:message:delete', {
+        chatId,
+        messageId: data.messageId,
+        lastMessage: data.lastMessage,
+      })
+    }
+
+    return res.json({ ok: true, ...data })
+  } catch (e) {
+    return res
+      .status(e.status || 500)
+      .json({ ok: false, error: e.message || 'Error eliminando mensaje' })
+  }
+}
+
 export async function markRead(req, res) {
   try {
     const { chatId } = req.params
