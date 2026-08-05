@@ -54,33 +54,59 @@ function filesToTraceAdjuntos(req) {
 function parseUrlAdjuntos(req) {
   const actor = req.personal?.id_personal || 'sistema'
   const urls = []
+  const rawInputs = toArray(req.body?.adjuntos_urls)
 
-  // Intentar parsear adjuntos_urls si existe
-  const urlsInput = req.body?.adjuntos_urls
-  if (urlsInput) {
-    try {
-      const parsed = typeof urlsInput === 'string' ? JSON.parse(urlsInput) : urlsInput
-      if (Array.isArray(parsed)) {
-        parsed.forEach(u => {
-          const url = String(u?.url || '').trim()
-          const nombre = String(u?.nombre || u?.name || url).trim()
-          if (url) {
-            urls.push({
-              tipo: 'url',
-              fileId: '',
-              name: nombre || url,
-              url,
-              mime: '',
-              size: 0,
-              uploadedBy: actor,
-              createdAt: new Date(),
-            })
-          }
+  rawInputs.forEach(input => {
+    let parsed = input
+
+    if (typeof input === 'string') {
+      const value = input.trim()
+      if (!value) return
+
+      parsed = value
+      if (value.startsWith('[') || value.startsWith('{')) {
+        try {
+          parsed = JSON.parse(value)
+        } catch {
+          parsed = { url: value, nombre: value }
+        }
+      }
+    }
+
+    toArray(parsed).forEach(u => {
+      const url = String(
+        typeof u === 'string' ? u : u?.url || u?.href || ''
+      ).trim()
+      const nombre = String(
+        typeof u === 'string' ? u : u?.nombre || u?.name || url
+      ).trim()
+      if (url) {
+        urls.push({
+          tipo: 'url',
+          fileId: '',
+          name: nombre || url,
+          url,
+          mime: '',
+          size: 0,
+          uploadedBy: actor,
+          createdAt: new Date(),
         })
       }
-    } catch {
-      // Si falla el parse, ignorar
-    }
+    })
+  })
+
+  const singleUrl = String(req.body?.url || req.body?.link || '').trim()
+  if (singleUrl) {
+    urls.push({
+      tipo: 'url',
+      fileId: '',
+      name: String(req.body?.nombre_url || req.body?.url_name || singleUrl).trim(),
+      url: singleUrl,
+      mime: '',
+      size: 0,
+      uploadedBy: actor,
+      createdAt: new Date(),
+    })
   }
 
   return urls
