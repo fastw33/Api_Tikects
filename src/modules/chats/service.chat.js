@@ -3,7 +3,18 @@ import { Conversation } from './model.conversation.js'
 import { Message } from './model.message.js'
 import { encryptText, decryptText } from './crypto.message.js'
 
-const ALLOWED_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+const ALLOWED_REACTION_EMOJIS = [
+  '👍',
+  '❤️',
+  '😂',
+  '😮',
+  '😢',
+  '🙏',
+  '👏',
+  '🔥',
+  '🎉',
+  '✅',
+]
 
 function uniqTrim(arr) {
   return [...new Set(arr.map(x => String(x).trim()))].filter(Boolean)

@@ -2,7 +2,18 @@
 import mongoose from 'mongoose'
 
 const isObjectId = v => mongoose.Types.ObjectId.isValid(v)
-const ALLOWED_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+const ALLOWED_REACTION_EMOJIS = [
+  '👍',
+  '❤️',
+  '😂',
+  '😮',
+  '😢',
+  '🙏',
+  '👏',
+  '🔥',
+  '🎉',
+  '✅',
+]
 
 function isValidIdPersonal(v) {
   return typeof v === 'string' && v.trim().length > 0 && v.trim().length <= 80
