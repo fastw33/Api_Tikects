@@ -45,6 +45,21 @@ function getLastReadAt(lastRead, id_personal) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function buildMessagePreview({ text = '', attachments = [] } = {}) {
+  const cleanText = String(text || '').replace(/\s+/g, ' ').trim()
+  if (cleanText) {
+    return cleanText.length > 160 ? `${cleanText.slice(0, 157)}...` : cleanText
+  }
+
+  const files = Array.isArray(attachments) ? attachments : []
+  if (!files.length) return 'Sin mensaje'
+  if (files.length === 1) {
+    const name = String(files[0]?.name || '').trim()
+    return name ? `Adjunto: ${name}` : 'Adjunto'
+  }
+  return `${files.length} adjuntos`
+}
+
 async function assertParticipant(chatId, id_personal) {
   const chat = await Conversation.findById(chatId).lean()
   if (!chat) {
@@ -112,7 +127,7 @@ export async function listMyChats({
 
   const [items, total] = await Promise.all([
     Conversation.find(filter)
-      .sort({ updatedAt: -1 })
+      .sort({ 'lastMessage.at': -1, updatedAt: -1 })
       .skip(skip)
       .limit(safeLimit)
       .lean(),
@@ -131,17 +146,43 @@ export async function listMyChats({
 
       if (lastReadAt) msgFilter.createdAt = { $gt: lastReadAt }
 
-      const unreadCount = await Message.countDocuments(msgFilter)
+      const [unreadCount, latestMessage] = await Promise.all([
+        Message.countDocuments(msgFilter),
+        Message.findOne({ chatId: c._id }).sort({ createdAt: -1 }).lean(),
+      ])
+
+      const latestText = latestMessage ? decryptText(latestMessage) : ''
+      const lastMessageAt =
+        latestMessage?.createdAt || c?.lastMessage?.at || c?.updatedAt || null
+      const lastMessagePreview = latestMessage
+        ? buildMessagePreview({
+            text: latestText,
+            attachments: latestMessage?.attachments,
+          })
+        : String(c?.lastMessage?.preview || '').trim()
 
       return {
         ...c,
         lastRead,
+        lastMessage: {
+          ...(c?.lastMessage || {}),
+          preview: lastMessagePreview,
+          at: lastMessageAt,
+          sender:
+            latestMessage?.sender_id_personal || c?.lastMessage?.sender || '',
+        },
         participantsCount: c.participants?.length || 0,
         unreadCount,
         lastReadAt,
       }
     })
   )
+
+  enriched.sort((a, b) => {
+    const atA = new Date(a?.lastMessage?.at || a?.createdAt || 0).getTime()
+    const atB = new Date(b?.lastMessage?.at || b?.createdAt || 0).getTime()
+    return atB - atA
+  })
 
   return {
     items: enriched,
@@ -194,8 +235,7 @@ export async function sendMessage({
   const chat = await assertParticipant(chatId, id_personal)
   const pid = String(id_personal).trim()
 
-  const hasAttachments = Array.isArray(attachments) && attachments.length > 0
-  const preview = hasAttachments ? 'Nuevo mensaje con adjunto' : 'Nuevo mensaje'
+  const preview = buildMessagePreview({ text, attachments })
 
   const enc = encryptText(text)
 
@@ -210,7 +250,7 @@ export async function sendMessage({
   await Conversation.findByIdAndUpdate(chatId, {
     $set: {
       updatedBy: pid,
-      lastMessage: { preview, at: new Date(), sender: pid },
+      lastMessage: { preview, at: msg.createdAt || new Date(), sender: pid },
     },
   })
 
@@ -261,10 +301,9 @@ export async function markRead({ chatId, id_personal, at }) {
     {
       $set: {
         [`lastRead.${pid}`]: lastReadAt,
-        updatedBy: pid,
       },
     },
-    { new: true }
+    { new: true, timestamps: false }
   ).lean()
 
   return { lastReadAt, lastRead: normalizeLastRead(chat?.lastRead), chat }
