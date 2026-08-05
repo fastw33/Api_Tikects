@@ -14,6 +14,16 @@ const AttachmentSchema = new Schema(
   { _id: false }
 )
 
+const ReplyToSchema = new Schema(
+  {
+    messageId: { type: Schema.Types.ObjectId, default: null },
+    sender_id_personal: { type: String, default: '', trim: true },
+    preview: { type: String, default: '', trim: true },
+    createdAt: { type: Date, default: null },
+  },
+  { _id: false }
+)
+
 const MessageSchema = new Schema(
   {
     chatId: { type: Schema.Types.ObjectId, required: true, index: true },
@@ -34,6 +44,8 @@ const MessageSchema = new Schema(
     preview: { type: String, default: '' },
 
     attachments: { type: [AttachmentSchema], default: [] },
+    replyTo: { type: ReplyToSchema, default: null },
+    mentions: { type: [String], default: [] },
 
     editedAt: { type: Date, default: null },
     editedBy: { type: String, default: '', trim: true },

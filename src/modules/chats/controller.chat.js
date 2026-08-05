@@ -61,6 +61,11 @@ export async function sendMessage(req, res) {
         .substring(0, 80)
         .trim()
       const notificationBody = bodyPreview || '[Archivo adjunto]'
+      const mentioned = new Set(
+        Array.isArray(message?.mentions)
+          ? message.mentions.map(id => String(id).trim()).filter(Boolean)
+          : []
+      )
 
       if (chat && chat.participants) {
         for (const participantId of chat.participants) {
@@ -68,11 +73,19 @@ export async function sendMessage(req, res) {
           // No notificar al remitente, solo a los otros participantes
           if (pid && pid !== senderId) {
             try {
+              const isMentioned = mentioned.has(pid)
+              const notificationType = isMentioned
+                ? 'chat.mention'
+                : 'chat.message'
+              const notificationTitle = isMentioned
+                ? 'Te mencionaron en chat'
+                : 'Nuevo mensaje en chat'
+
               // ✅ GUARDAR en BD
               const notification = await Notification.create({
                 to_id_personal: pid,
-                type: 'chat.message',
-                title: 'Nuevo mensaje en chat',
+                type: notificationType,
+                title: notificationTitle,
                 body: notificationBody,
                 target: {
                   type: 'chat',
@@ -88,10 +101,10 @@ export async function sendMessage(req, res) {
               // Emitir socket.io
               io.to(`user:${pid}`).emit('notification:new', {
                 _id: notification._id,
-                type: 'chat.message',
+                type: notificationType,
                 chatId,
                 messageId: message._id,
-                title: 'Nuevo mensaje en chat',
+                title: notificationTitle,
                 body: notificationBody,
                 createdAt: notification.createdAt,
               })
@@ -99,7 +112,7 @@ export async function sendMessage(req, res) {
               await sendPushToUser({
                 id_personal: pid,
                 payload: {
-                  title: 'Nuevo mensaje en chat',
+                  title: notificationTitle,
                   body: notificationBody,
                   data: {
                     url: `/home?openChatId=${encodeURIComponent(
