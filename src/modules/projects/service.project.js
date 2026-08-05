@@ -2034,13 +2034,20 @@ export async function listRepoNodes({ project_id }) {
 async function getConsolidatedFiles(project_id) {
   const pid = assertObjectId(project_id, 'project_id')
 
+  const isConsolidableAttachment = a => {
+    const tipo = String(a?.tipo || '').trim().toLowerCase()
+    const url = String(a?.url || '').trim()
+    if (!url) return false
+    return tipo === 'url' || tipo === 'archivo' || !!a?.fileId
+  }
+
   // Obtener proyecto con su trazabilidad
   const project = await Project.findById(pid).lean()
   if (!project || isHiddenProjectState(project.estado)) return []
 
   const projectFiles = (project.trazabilidad || []).flatMap(t =>
     (t.adjuntos || [])
-      .filter(a => a.tipo === 'archivo' && a.fileId)
+      .filter(isConsolidableAttachment)
       .map(a => ({
         ...a,
         source: 'project',
@@ -2057,7 +2064,7 @@ async function getConsolidatedFiles(project_id) {
   const taskFiles = tasks.flatMap(task =>
     (task.trazabilidad || []).flatMap(t =>
       (t.adjuntos || [])
-        .filter(a => a.tipo === 'archivo' && a.fileId)
+        .filter(isConsolidableAttachment)
         .map(a => ({
           ...a,
           source: 'task',
