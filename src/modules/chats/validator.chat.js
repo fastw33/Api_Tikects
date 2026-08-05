@@ -37,6 +37,13 @@ export function validateChatIdParam(req, res, next) {
   next()
 }
 
+export function validateMessageIdParam(req, res, next) {
+  const { messageId } = req.params
+  if (!isObjectId(messageId))
+    return res.status(400).json({ ok: false, error: 'messageId inválido' })
+  next()
+}
+
 export function validateListMyChats(req, res, next) {
   const errors = []
   const { id_personal, contextType } = req.query
@@ -115,6 +122,31 @@ export function validateSendMessage(req, res, next) {
       }
     }
   }
+
+  if (errors.length) return res.status(400).json({ ok: false, errors })
+  next()
+}
+
+export function validateEditMessage(req, res, next) {
+  const errors = []
+  const { id_personal, text } = req.body
+
+  if (!id_personal || !isValidIdPersonal(id_personal))
+    errors.push('id_personal (actor) es requerido.')
+
+  if (typeof text !== 'string' || !text.trim())
+    errors.push('text es requerido para editar el mensaje.')
+
+  if (errors.length) return res.status(400).json({ ok: false, errors })
+  next()
+}
+
+export function validateDeleteMessage(req, res, next) {
+  const errors = []
+  const { id_personal } = req.body
+
+  if (!id_personal || !isValidIdPersonal(id_personal))
+    errors.push('id_personal (actor) es requerido.')
 
   if (errors.length) return res.status(400).json({ ok: false, errors })
   next()

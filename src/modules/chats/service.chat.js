@@ -45,6 +45,20 @@ function getLastReadAt(lastRead, id_personal) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+function hasBeenReadByOthers({ chat, message, id_personal }) {
+  const pid = String(id_personal || '').trim()
+  const messageAt = new Date(message?.createdAt || 0).getTime()
+  if (!messageAt) return false
+
+  const lastRead = normalizeLastRead(chat?.lastRead)
+  return (chat?.participants || []).some(participantId => {
+    const otherId = String(participantId || '').trim()
+    if (!otherId || otherId === pid) return false
+    const readAt = new Date(lastRead[otherId] || 0).getTime()
+    return Boolean(readAt && readAt >= messageAt)
+  })
+}
+
 function buildMessagePreview({ text = '', attachments = [] } = {}) {
   const cleanText = String(text || '').replace(/\s+/g, ' ').trim()
   if (cleanText) {
@@ -287,6 +301,124 @@ export async function sendMessage({
   })
 
   return messageOut
+}
+
+export async function editMessage({ chatId, messageId, id_personal, text }) {
+  const chat = await assertParticipant(chatId, id_personal)
+  const pid = String(id_personal).trim()
+
+  const message = await Message.findOne({ _id: messageId, chatId }).lean()
+  if (!message) {
+    const err = new Error('Mensaje no encontrado.')
+    err.status = 404
+    throw err
+  }
+
+  if (String(message.sender_id_personal || '') !== pid) {
+    const err = new Error('Solo puedes editar tus propios mensajes.')
+    err.status = 403
+    throw err
+  }
+
+  if (hasBeenReadByOthers({ chat, message, id_personal: pid })) {
+    const err = new Error('No puedes editar un mensaje que ya fue leído.')
+    err.status = 409
+    throw err
+  }
+
+  const cleanText = String(text || '').trim()
+  if (!cleanText) {
+    const err = new Error('El texto del mensaje es requerido.')
+    err.status = 400
+    throw err
+  }
+
+  const enc = encryptText(cleanText)
+  const preview = buildMessagePreview({
+    text: cleanText,
+    attachments: message.attachments,
+  })
+  const editedAt = new Date()
+
+  const updated = await Message.findOneAndUpdate(
+    { _id: messageId, chatId },
+    {
+      $set: {
+        ...enc,
+        preview,
+        editedAt,
+        editedBy: pid,
+      },
+    },
+    { new: true }
+  ).lean()
+
+  const latest = await Message.findOne({ chatId }).sort({ createdAt: -1 }).lean()
+  if (latest && String(latest._id) === String(messageId)) {
+    await Conversation.findByIdAndUpdate(chatId, {
+      $set: {
+        updatedBy: pid,
+        lastMessage: {
+          preview,
+          at: latest.createdAt || updated.createdAt || new Date(),
+          sender: pid,
+        },
+      },
+    })
+  }
+
+  return {
+    ...updated,
+    text: decryptText(updated),
+  }
+}
+
+export async function deleteMessage({ chatId, messageId, id_personal }) {
+  const chat = await assertParticipant(chatId, id_personal)
+  const pid = String(id_personal).trim()
+
+  const message = await Message.findOne({ _id: messageId, chatId }).lean()
+  if (!message) {
+    const err = new Error('Mensaje no encontrado.')
+    err.status = 404
+    throw err
+  }
+
+  if (String(message.sender_id_personal || '') !== pid) {
+    const err = new Error('Solo puedes eliminar tus propios mensajes.')
+    err.status = 403
+    throw err
+  }
+
+  if (hasBeenReadByOthers({ chat, message, id_personal: pid })) {
+    const err = new Error('No puedes eliminar un mensaje que ya fue leído.')
+    err.status = 409
+    throw err
+  }
+
+  await Message.deleteOne({ _id: messageId, chatId })
+
+  const latest = await Message.findOne({ chatId }).sort({ createdAt: -1 }).lean()
+  const latestText = latest ? decryptText(latest) : ''
+  const lastMessage = latest
+    ? {
+        preview: buildMessagePreview({
+          text: latestText,
+          attachments: latest.attachments,
+        }),
+        at: latest.createdAt || new Date(),
+        sender: latest.sender_id_personal || '',
+      }
+    : { preview: '', at: null, sender: '' }
+
+  await Conversation.findByIdAndUpdate(chatId, {
+    $set: {
+      updatedBy: pid,
+      lastMessage,
+    },
+  })
+
+  return { messageId: String(messageId), lastMessage }
 }
 
 export async function markRead({ chatId, id_personal, at }) {

@@ -7,8 +7,11 @@ import {
   validateListMyChats,
   validateCreateFreeChat,
   validateChatIdParam,
+  validateMessageIdParam,
   validateGetMessages,
   validateSendMessage,
+  validateEditMessage,
+  validateDeleteMessage,
   validatePatchRead,
   validatePatchParticipants,
   validateDeactivate,
@@ -105,6 +108,22 @@ router.post(
   validateChatIdParam,
   validateSendMessage,
   ChatController.sendMessage
+)
+
+router.patch(
+  '/:chatId/messages/:messageId',
+  validateChatIdParam,
+  validateMessageIdParam,
+  validateEditMessage,
+  ChatController.editMessage
+)
+
+router.delete(
+  '/:chatId/messages/:messageId',
+  validateChatIdParam,
+  validateMessageIdParam,
+  validateDeleteMessage,
+  ChatController.deleteMessage
 )
 
 router.patch(
