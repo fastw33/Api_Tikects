@@ -141,6 +141,7 @@ const ProjectTaskSchema = new Schema(
     trazabilidad: { type: [TaskTraceSchema], default: [] },
     due_date: { type: Date, default: null },
     closed_at: { type: Date, default: null },
+    request_key: { type: String, trim: true },
     createdBy: { type: String, required: true, trim: true },
     updatedBy: { type: String, required: true, trim: true },
   },
@@ -148,6 +149,15 @@ const ProjectTaskSchema = new Schema(
 )
 
 ProjectTaskSchema.index({ project_id: 1, seq: 1 }, { unique: true })
+ProjectTaskSchema.index(
+  { project_id: 1, request_key: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      request_key: { $exists: true, $type: 'string' },
+    },
+  }
+)
 
 const ProjectRepositoryNodeSchema = new Schema(
   {
