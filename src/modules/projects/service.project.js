@@ -471,6 +471,15 @@ function normalizeState(v) {
   return String(v || '').trim()
 }
 
+function normalizeRequestKey(v) {
+  const key = String(v || '').trim()
+  return key || null
+}
+
+function isDuplicateKeyError(err) {
+  return Number(err?.code) === 11000
+}
+
 const HIDDEN_PROJECT_STATES = ['cerrado', 'Cerrado']
 
 function isHiddenProjectState(v) {
@@ -1038,6 +1047,12 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
   const asignado_tipo = String(payload?.asignado_tipo || 'personal').trim()
   const assigned_to = String(payload?.assigned_to || '').trim()
   const prioridad_id = String(payload?.prioridad_id || '').trim()
+  const request_key = normalizeRequestKey(
+    payload?.request_key || payload?.idempotency_key
+  )
+  const descripcion = String(payload?.descripcion || '').trim()
+  const estado = normalizeState(payload?.estado || 'abierta')
+  const due_date = payload?.due_date ? new Date(payload.due_date) : null
 
   if (!['personal', 'area', 'team'].includes(asignado_tipo)) {
     const err = new Error('asignado_tipo debe ser personal, area o team.')
@@ -1057,51 +1072,105 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
     throw err
   }
 
-  const seq = Number(project.nextTaskSeq || 1)
-  const code = `${project.code}#T-${String(seq).padStart(3, '0')}`
+  if (request_key) {
+    const existingTask = await ProjectTask.findOne({
+      project_id: project._id,
+      request_key,
+    }).lean()
+    if (existingTask) return existingTask
+  }
 
-  const task = await ProjectTask.create({
-    project_id: project._id,
-    code,
-    seq,
-    titulo,
-    descripcion: String(payload?.descripcion || '').trim(),
-    prioridad_id,
-    prioridad_label: String(payload?.prioridad_label || '').trim(),
-    prioridad_color: String(payload?.prioridad_color || '').trim(),
-    estado: normalizeState(payload?.estado || 'abierta'),
-    asignado_tipo,
-    assigned_to,
-    assigned_label: String(payload?.assigned_label || '').trim(),
-    due_date: payload?.due_date ? new Date(payload.due_date) : null,
-    mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
-    trazabilidad: [
-      {
-        estado: normalizeState(payload?.estado || 'abierta'),
-        nota: 'Tarea creada',
-        mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
-        adjuntos: Array.isArray(adjuntos) ? adjuntos : [],
-        changedBy: actor,
-      },
-    ],
-    createdBy: actor,
-    updatedBy: actor,
-    closed_at: isClosedLikeState(payload?.estado) ? new Date() : null,
-  })
+  if (!request_key) {
+    const recentDuplicate = await ProjectTask.findOne({
+      project_id: project._id,
+      createdBy: actor,
+      titulo,
+      descripcion,
+      prioridad_id,
+      estado,
+      asignado_tipo,
+      assigned_to,
+      due_date,
+      createdAt: { $gte: new Date(Date.now() - 5000) },
+    })
+      .sort({ createdAt: -1 })
+      .lean()
 
-  project.nextTaskSeq = seq + 1
-  project.updatedBy = actor
-  await project.save()
+    if (recentDuplicate) return recentDuplicate
+  }
 
-  await ensureTaskAccessGrants({ project, task, actor })
+  const reservedProject = await Project.findOneAndUpdate(
+    { _id: project._id },
+    {
+      $inc: { nextTaskSeq: 1 },
+      $set: { updatedBy: actor },
+    },
+    { new: false }
+  )
+
+  if (!reservedProject) {
+    const err = new Error('Proyecto no encontrado.')
+    err.status = 404
+    throw err
+  }
+
+  const seq = Number(reservedProject.nextTaskSeq || 1)
+  const code = `${reservedProject.code}#T-${String(seq).padStart(3, '0')}`
+
+  let task
+  try {
+    task = await ProjectTask.create({
+      project_id: reservedProject._id,
+      code,
+      seq,
+      titulo,
+      descripcion,
+      prioridad_id,
+      prioridad_label: String(payload?.prioridad_label || '').trim(),
+      prioridad_color: String(payload?.prioridad_color || '').trim(),
+      estado,
+      asignado_tipo,
+      assigned_to,
+      assigned_label: String(payload?.assigned_label || '').trim(),
+      due_date,
+      mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
+      trazabilidad: [
+        {
+          estado,
+          nota: 'Tarea creada',
+          mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
+          adjuntos: Array.isArray(adjuntos) ? adjuntos : [],
+          changedBy: actor,
+        },
+      ],
+      ...(request_key ? { request_key } : {}),
+      createdBy: actor,
+      updatedBy: actor,
+      closed_at: isClosedLikeState(payload?.estado) ? new Date() : null,
+    })
+  } catch (err) {
+    if (request_key && isDuplicateKeyError(err)) {
+      const existingTask = await ProjectTask.findOne({
+        project_id: reservedProject._id,
+        request_key,
+      }).lean()
+      if (existingTask) return existingTask
+    }
+    throw err
+  }
+
+  await ensureTaskAccessGrants({ project: reservedProject, task, actor })
 
   const mentionIds = (task.mentions || []).map(m => m?.id_personal)
   const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
-  const notifyTo = projectParticipants(project, [...assigneeIds, ...mentionIds])
+  const notifyTo = projectParticipants(reservedProject, [
+    ...assigneeIds,
+    ...mentionIds,
+  ])
 
   await notifyProject({
     actor,
-    project,
+    project: reservedProject,
     to: notifyTo,
     type: 'project.task_created',
     title: `Nueva tarea ${task.code}`,
