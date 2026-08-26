@@ -180,6 +180,9 @@ async function buildProjectMembersFromTicket(ticket, manualAccess = {}) {
   return uniq([
     ticket?.creado_por,
     ...(Array.isArray(ticket?.watchers) ? ticket.watchers : []),
+    ...(Array.isArray(ticket?.asignados_personal)
+      ? ticket.asignados_personal
+      : []),
     ...assignedMembers,
     ...manualPersonal,
     ...manualGroupMembers,
@@ -573,6 +576,7 @@ async function syncProjectsFromTicketsForUser(id_personal) {
     $or: [
       { creado_por: pid },
       { watchers: pid },
+      { asignados_personal: pid },
       ...assignmentFilters,
     ],
   })
@@ -586,6 +590,7 @@ async function syncProjectsFromTicketsForUser(id_personal) {
       creado_por: 1,
       watchers: 1,
       asignado_a: 1,
+      asignados_personal: 1,
     })
     .lean()
 

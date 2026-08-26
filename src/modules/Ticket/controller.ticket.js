@@ -22,6 +22,25 @@ function buildNestedFromBracketKeys(body, prefix) {
   return Object.keys(out).length ? out : undefined
 }
 
+function parseMaybeJSON(value) {
+  if (typeof value !== 'string') return value
+  const s = value.trim()
+  if (!s) return value
+  if (!(s.startsWith('{') || s.startsWith('['))) return value
+  try {
+    return JSON.parse(s)
+  } catch {
+    return value
+  }
+}
+
+function readStringArray(body, fieldName) {
+  let value = parseMaybeJSON(body?.[fieldName])
+  if (value === undefined) value = toArray(body?.[`${fieldName}[]`])
+  if (!Array.isArray(value) && value !== undefined) value = [value]
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : []
+}
+
 // Soporta operacion[subtipo], operacion[cliente], operacion[lote], etc.
 function buildOperacionFromFormData(body) {
   const base = {}
@@ -72,30 +91,19 @@ function normalizeCreateBody(req) {
   const b = req.body || {}
 
   // watchers[] en form-data
-  const watchers = toArray(b['watchers[]']).map(String).filter(Boolean)
+  const watchers = readStringArray(b, 'watchers')
+  const asignados_personal = readStringArray(b, 'asignados_personal')
 
   // asignado_a puede venir como JSON string o como bracket keys
-  let asignado_a = b.asignado_a
-  if (typeof asignado_a === 'string') {
-    try {
-      asignado_a = JSON.parse(asignado_a)
-    } catch {
-      asignado_a = undefined
-    }
-  }
+  let asignado_a = parseMaybeJSON(b.asignado_a)
+  if (typeof asignado_a === 'string') asignado_a = undefined
   if (!asignado_a) {
     asignado_a = buildNestedFromBracketKeys(b, 'asignado_a')
   }
 
   // operacion puede venir JSON o bracket keys
-  let operacion = b.operacion
-  if (typeof operacion === 'string') {
-    try {
-      operacion = JSON.parse(operacion)
-    } catch {
-      operacion = undefined
-    }
-  }
+  let operacion = parseMaybeJSON(b.operacion)
+  if (typeof operacion === 'string') operacion = undefined
   if (!operacion) {
     operacion = buildOperacionFromFormData(b)
   }
@@ -106,6 +114,7 @@ function normalizeCreateBody(req) {
   return {
     ...b,
     watchers,
+    asignados_personal,
     asignado_a,
     operacion,
     adjuntos, // ✅ adjuntos salen de files
