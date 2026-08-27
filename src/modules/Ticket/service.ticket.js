@@ -20,6 +20,11 @@ function uniqTrim(arr) {
   return [...new Set(arr.map(x => String(x).trim()))].filter(Boolean)
 }
 
+function asArray(value) {
+  if (value === undefined || value === null) return []
+  return Array.isArray(value) ? value : [value]
+}
+
 function parsePaging({ page, limit }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 100)
   const safePage = Math.max(Number(page) || 1, 1)
@@ -229,8 +234,20 @@ async function resolveAssignedPersonals(asignado_a) {
   return []
 }
 
+function resolveDirectAssignedPersonals(ticket) {
+  return uniqTrim([
+    ...asArray(ticket?.asignados_personal),
+    ...(ticket?.asignado_a?.tipo === 'personal' && ticket?.asignado_a?.id
+      ? [ticket.asignado_a.id]
+      : []),
+  ])
+}
+
 async function computeTicketParticipants(ticket) {
-  const assigned = await resolveAssignedPersonals(ticket.asignado_a)
+  const assigned = uniqTrim([
+    ...(await resolveAssignedPersonals(ticket.asignado_a)),
+    ...resolveDirectAssignedPersonals(ticket),
+  ])
   return buildTicketParticipants({
     creado_por: ticket.creado_por,
     watchers: ticket.watchers || [],
@@ -277,6 +294,12 @@ function ticketTargetMisCreaciones(ticketId) {
 export async function createTicket(payload) {
   const actor = String(payload.creado_por).trim()
   const { code, codePrefix, codeSeq } = await nextTicketCodeByTipo(payload.tipo)
+  const asignadosPersonal = uniqTrim([
+    ...asArray(payload.asignados_personal),
+    ...(payload.asignado_a?.tipo === 'personal' && payload.asignado_a?.id
+      ? [payload.asignado_a.id]
+      : []),
+  ])
 
   const base = {
     orgId: String(payload.orgId).trim(),
@@ -311,6 +334,7 @@ export async function createTicket(payload) {
     ],
 
     asignado_a: payload.asignado_a ?? null,
+    asignados_personal: asignadosPersonal,
     creado_por: actor,
     watchers: uniqTrim(payload.watchers ?? []),
     adjuntos: payload.adjuntos ?? [],
@@ -435,6 +459,7 @@ export async function listMine(query) {
       conditions.watching,
       conditions.support,
       { 'asignado_a.tipo': 'personal', 'asignado_a.id': pid },
+      { asignados_personal: pid },
     ]
   } else {
     const err = new Error('scope inválido.')
@@ -471,6 +496,7 @@ export async function listAssignedToPersonal(query) {
 
   base.$or = [
     { 'asignado_a.tipo': 'personal', 'asignado_a.id': pid },
+    { asignados_personal: pid },
     ...(teamIds.length
       ? [{ 'asignado_a.tipo': 'team', 'asignado_a.id': { $in: teamIds } }]
       : []),
@@ -543,6 +569,7 @@ export async function updateTicketPut(id, payload) {
     'prioridad_id',
     'estado_id',
     'asignado_a',
+    'asignados_personal',
     'watchers',
     'adjuntos',
     'activo',
@@ -657,6 +684,10 @@ export async function patchAssign(id, { id_personal, asignado_a }) {
     throw err
   }
   ticket.asignado_a = asignado_a
+  ticket.asignados_personal =
+    asignado_a?.tipo === 'personal' && asignado_a?.id
+      ? uniqTrim([asignado_a.id])
+      : []
   ticket.updatedBy = actor
   await ticket.save()
   return ticket.toObject()

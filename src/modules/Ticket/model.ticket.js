@@ -129,6 +129,7 @@ const TicketSchema = new Schema(
     estado_historial: { type: [EstadoHistorialSchema], default: [] },
 
     asignado_a: { type: AsignadoASchema, default: null },
+    asignados_personal: [{ type: String, trim: true, index: true }],
 
     creado_por: { type: String, required: true, trim: true, index: true },
     watchers: [{ type: String, trim: true, index: true }],
@@ -164,6 +165,7 @@ const TicketSchema = new Schema(
 // Índices
 // ===============================
 TicketSchema.index({ 'asignado_a.tipo': 1, 'asignado_a.id': 1 })
+TicketSchema.index({ asignados_personal: 1 })
 TicketSchema.index({ orgId: 1, tipo: 1, estado_id: 1 })
 TicketSchema.index({ orgId: 1, tipo: 1, prioridad_id: 1 })
 TicketSchema.index({ tipo: 1, codeSeq: -1 })

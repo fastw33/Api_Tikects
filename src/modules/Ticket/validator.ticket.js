@@ -17,6 +17,13 @@ function uniqTrim(arr) {
   return [...new Set(arr.map(x => String(x).trim()))].filter(Boolean)
 }
 
+function parseStringArray(value, body, fieldName) {
+  let out = parseMaybeJSON(value)
+  if (out === undefined) out = toArray(body?.[`${fieldName}[]`])
+  if (!Array.isArray(out) && out !== undefined) out = [out]
+  return Array.isArray(out) ? out.map(String).filter(Boolean) : undefined
+}
+
 function isValidDate(v) {
   const d = new Date(v)
   return !isNaN(d.getTime())
@@ -115,6 +122,17 @@ function validateAsignadoA(asignado_a, errors) {
         'asignado_a.id debe ser ObjectId válido cuando tipo=area|team.'
       )
     }
+  }
+}
+
+function validateIdPersonalArray(value, errors, fieldName) {
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    errors.push(`${fieldName} debe ser array.`)
+    return
+  }
+  if (uniqTrim(value).some(x => !isValidIdPersonal(x))) {
+    errors.push(`${fieldName} debe contener id_personal válidos.`)
   }
 }
 
@@ -264,6 +282,7 @@ export function validateCreateTicket(req, res, next) {
     prioridad_id,
     estado_id,
     asignado_a,
+    asignados_personal,
     creado_por,
     watchers,
     adjuntos,
@@ -275,14 +294,15 @@ export function validateCreateTicket(req, res, next) {
   asignado_a =
     parseMaybeJSON(asignado_a) || readBracketObject(req.body, 'asignado_a')
 
+  asignados_personal = parseStringArray(
+    asignados_personal,
+    req.body,
+    'asignados_personal'
+  )
+
   operacion = parseMaybeJSON(operacion) || readOperacionFromBracket(req.body)
 
-  watchers = parseMaybeJSON(watchers)
-  if (watchers === undefined) watchers = toArray(req.body['watchers[]'])
-  if (!Array.isArray(watchers) && watchers !== undefined) watchers = [watchers]
-  watchers = Array.isArray(watchers)
-    ? watchers.map(String).filter(Boolean)
-    : undefined
+  watchers = parseStringArray(watchers, req.body, 'watchers')
 
   // adjuntos normalmente los arma el controller desde req.files.
   // Pero si el cliente los manda (como JSON string), lo aceptamos y validamos.
@@ -319,13 +339,14 @@ export function validateCreateTicket(req, res, next) {
   }
 
   validateAsignadoA(asignado_a, errors)
+  validateIdPersonalArray(
+    asignados_personal,
+    errors,
+    'asignados_personal'
+  )
   validateNota(nota_estado, errors, 'nota_estado')
 
-  if (watchers !== undefined) {
-    if (!Array.isArray(watchers)) errors.push('watchers debe ser array.')
-    else if (uniqTrim(watchers).some(x => !isValidIdPersonal(x)))
-      errors.push('watchers debe contener id_personal válidos.')
-  }
+  validateIdPersonalArray(watchers, errors, 'watchers')
 
   if (adjuntos !== undefined && adjuntos !== null)
     validateAttachmentsArray(adjuntos, errors)
@@ -399,6 +420,7 @@ export function validatePutTicket(req, res, next) {
     prioridad_id,
     estado_id,
     asignado_a,
+    asignados_personal,
     watchers,
     adjuntos,
     operacion,
@@ -411,12 +433,12 @@ export function validatePutTicket(req, res, next) {
     parseMaybeJSON(asignado_a) || readBracketObject(req.body, 'asignado_a')
   operacion = parseMaybeJSON(operacion) || readOperacionFromBracket(req.body)
 
-  watchers = parseMaybeJSON(watchers)
-  if (watchers === undefined) watchers = toArray(req.body['watchers[]'])
-  if (!Array.isArray(watchers) && watchers !== undefined) watchers = [watchers]
-  watchers = Array.isArray(watchers)
-    ? watchers.map(String).filter(Boolean)
-    : undefined
+  asignados_personal = parseStringArray(
+    asignados_personal,
+    req.body,
+    'asignados_personal'
+  )
+  watchers = parseStringArray(watchers, req.body, 'watchers')
 
   adjuntos = parseMaybeJSON(adjuntos)
 
@@ -452,11 +474,12 @@ export function validatePutTicket(req, res, next) {
   if (asignado_a !== undefined && asignado_a !== null)
     validateAsignadoA(asignado_a, errors)
 
-  if (watchers !== undefined) {
-    if (!Array.isArray(watchers)) errors.push('watchers debe ser array.')
-    else if (uniqTrim(watchers).some(x => !isValidIdPersonal(x)))
-      errors.push('watchers debe contener id_personal válidos.')
-  }
+  validateIdPersonalArray(
+    asignados_personal,
+    errors,
+    'asignados_personal'
+  )
+  validateIdPersonalArray(watchers, errors, 'watchers')
 
   if (adjuntos !== undefined && adjuntos !== null)
     validateAttachmentsArray(adjuntos, errors)
