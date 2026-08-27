@@ -136,6 +136,7 @@ const ProjectTaskSchema = new Schema(
     },
     assigned_to: { type: String, default: '', trim: true, index: true },
     assigned_label: { type: String, default: '', trim: true },
+    asignados_personal: [{ type: String, trim: true, index: true }],
     
     mentions: { type: [MentionSchema], default: [] },
     trazabilidad: { type: [TaskTraceSchema], default: [] },
@@ -149,6 +150,7 @@ const ProjectTaskSchema = new Schema(
 )
 
 ProjectTaskSchema.index({ project_id: 1, seq: 1 }, { unique: true })
+ProjectTaskSchema.index({ asignados_personal: 1 })
 ProjectTaskSchema.index(
   { project_id: 1, request_key: 1 },
   {

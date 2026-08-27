@@ -24,6 +24,25 @@ function uniq(arr) {
   return [...new Set((arr || []).map(x => String(x).trim()).filter(Boolean))]
 }
 
+function stringArray(value) {
+  if (value === undefined || value === null) return []
+  if (Array.isArray(value)) return uniq(value)
+  if (typeof value === 'string') {
+    const raw = value.trim()
+    if (!raw) return []
+    if (raw.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) return uniq(parsed)
+      } catch {
+        // continue with scalar parsing
+      }
+    }
+    return uniq(raw.split(','))
+  }
+  return uniq([value])
+}
+
 function uniqObjectIds(arr) {
   return uniq(arr).filter(x => mongoose.Types.ObjectId.isValid(x))
 }
@@ -222,6 +241,7 @@ async function getUserProjectTaskAssignmentFilters(id_personal) {
 
   return [
     { asignado_tipo: 'personal', assigned_to: pid },
+    { asignado_tipo: 'personal', asignados_personal: pid },
     ...areas.map(area => ({
       asignado_tipo: 'area',
       assigned_to: String(area._id),
@@ -236,21 +256,26 @@ async function getUserProjectTaskAssignmentFilters(id_personal) {
 async function resolveProjectTaskAssigneePersonalIds(task) {
   const tipo = String(task?.asignado_tipo || 'personal').trim()
   const id = String(task?.assigned_to || '').trim()
-  if (!id) return []
-  if (tipo === 'personal') return [id]
+  const direct = uniq([
+    ...stringArray(task?.asignados_personal),
+    ...(tipo === 'personal' && id ? [id] : []),
+  ])
+
+  if (tipo === 'personal') return direct
+  if (!id) return direct
   if (!mongoose.Types.ObjectId.isValid(id)) return []
 
   if (tipo === 'area') {
     const area = await Area.findById(id, { personal_ids: 1 }).lean()
-    return uniq(area?.personal_ids || [])
+    return uniq([...(area?.personal_ids || []), ...direct])
   }
 
   if (tipo === 'team') {
     const team = await Team.findById(id, { personal_ids: 1 }).lean()
-    return uniq(team?.personal_ids || [])
+    return uniq([...(team?.personal_ids || []), ...direct])
   }
 
-  return []
+  return direct
 }
 
 async function canAccessTaskByAssignment(task, id_personal) {
@@ -841,6 +866,7 @@ export async function getProjectById({ project_id, id_personal }) {
         _id: 1,
         asignado_tipo: 1,
         assigned_to: 1,
+        asignados_personal: 1,
         mentions: 1,
       })
       .lean(),
@@ -1050,7 +1076,17 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
   }
 
   const asignado_tipo = String(payload?.asignado_tipo || 'personal').trim()
-  const assigned_to = String(payload?.assigned_to || '').trim()
+  const assignedPersonal =
+    asignado_tipo === 'personal'
+      ? uniq([
+          ...stringArray(payload?.asignados_personal),
+          payload?.assigned_to,
+        ])
+      : []
+  const assigned_to =
+    asignado_tipo === 'personal'
+      ? assignedPersonal[0] || ''
+      : String(payload?.assigned_to || '').trim()
   const prioridad_id = String(payload?.prioridad_id || '').trim()
   const request_key = normalizeRequestKey(
     payload?.request_key || payload?.idempotency_key
@@ -1095,6 +1131,7 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
       estado,
       asignado_tipo,
       assigned_to,
+      asignados_personal: assignedPersonal,
       due_date,
       createdAt: { $gte: new Date(Date.now() - 5000) },
     })
@@ -1137,6 +1174,7 @@ export async function createProjectTask({ project_id, id_personal, payload, adju
       asignado_tipo,
       assigned_to,
       assigned_label: String(payload?.assigned_label || '').trim(),
+      asignados_personal: assignedPersonal,
       due_date,
       mentions: Array.isArray(payload?.mentions) ? payload.mentions : [],
       trazabilidad: [
@@ -1247,6 +1285,7 @@ export async function patchProjectTask({
     estado: String(task.estado || ''),
     asignado_tipo: String(task.asignado_tipo || 'personal'),
     assigned_to: String(task.assigned_to || ''),
+    asignados_personal: stringArray(task.asignados_personal),
   }
 
   const member = isMember(project, pid)
@@ -1276,14 +1315,28 @@ export async function patchProjectTask({
     'asignado_tipo',
     'assigned_to',
     'assigned_label',
+    'asignados_personal',
     'due_date',
   ]
   for (const k of editable) {
     if (payload[k] !== undefined) {
       if (k === 'due_date') task[k] = payload[k] ? new Date(payload[k]) : null
       else if (k === 'estado') task[k] = normalizeState(payload[k])
+      else if (k === 'asignados_personal')
+        task[k] = stringArray(payload[k])
       else task[k] = String(payload[k] || '').trim()
     }
+  }
+
+  if (String(task.asignado_tipo || '').trim() === 'personal') {
+    const assignedPersonal = uniq([
+      ...stringArray(task.asignados_personal),
+      task.assigned_to,
+    ])
+    task.assigned_to = assignedPersonal[0] || ''
+    task.asignados_personal = assignedPersonal
+  } else {
+    task.asignados_personal = []
   }
 
   task.closed_at = isClosedLikeState(task.estado) ? new Date() : null
@@ -1297,13 +1350,17 @@ export async function patchProjectTask({
   const prevAssigneeIds = await resolveProjectTaskAssigneePersonalIds({
     asignado_tipo: prevState.asignado_tipo,
     assigned_to: prevState.assigned_to,
+    asignados_personal: prevState.asignados_personal,
   })
   const notifyTo = projectParticipants(project, [
     ...assigneeIds,
     ...prevAssigneeIds,
   ])
   const changedState = prevState.estado !== String(task.estado || '')
-  const changedAssignee = prevState.assigned_to !== String(task.assigned_to || '')
+  const changedAssignee =
+    prevState.assigned_to !== String(task.assigned_to || '') ||
+    prevState.asignados_personal.join('|') !==
+      stringArray(task.asignados_personal).join('|')
 
   await notifyProject({
     actor: pid,
@@ -1318,7 +1375,7 @@ export async function patchProjectTask({
     body: changedState
       ? `Estado: ${prevState.estado || '—'} → ${task.estado || '—'}`
       : changedAssignee
-        ? `Asignación: ${prevState.assigned_to || '—'} → ${task.assigned_to || '—'}`
+        ? `Asignación: ${prevAssigneeIds.join(', ') || '—'} → ${assigneeIds.join(', ') || '—'}`
         : `Se actualizó la tarea ${task.code}`,
     extraTarget: { taskId: String(task._id), taskCode: task.code },
     meta: { taskId: String(task._id), taskCode: task.code },
@@ -1518,10 +1575,12 @@ export async function patchTaskTrace({
   task.markModified('trazabilidad')
   await task.save()
 
+  const assigneeIds = await resolveProjectTaskAssigneePersonalIds(task)
+
   await notifyProject({
     actor,
     project,
-    to: projectParticipants(project, [task.assigned_to]),
+    to: projectParticipants(project, assigneeIds),
     type: 'project.task_trace_updated',
     title: `Trazabilidad editada en ${task.code}`,
     body: nota.slice(0, 160),
