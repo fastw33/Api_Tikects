@@ -1,5 +1,11 @@
 // src/modules/chats/model.message.js
 import mongoose from 'mongoose'
+import {
+  CONFIDENCE,
+  PROVIDERS,
+  RESOURCE_TYPES,
+  SOURCES,
+} from '../sharedResources/constants.js'
 
 const { Schema } = mongoose
 
@@ -33,6 +39,40 @@ const ReactionSchema = new Schema(
   { _id: false }
 )
 
+const SharedResourceSchema = new Schema(
+  {
+    originalUrl: { type: String, required: true, trim: true },
+    resolvedUrl: { type: String, default: '', trim: true },
+    provider: {
+      type: String,
+      enum: Object.values(PROVIDERS),
+      default: PROVIDERS.UNKNOWN,
+      index: true,
+    },
+    name: { type: String, default: null, trim: true },
+    extension: { type: String, default: '', trim: true },
+    mimeType: { type: String, default: '', trim: true },
+    resourceType: {
+      type: String,
+      enum: Object.values(RESOURCE_TYPES),
+      default: RESOURCE_TYPES.UNKNOWN,
+    },
+    source: {
+      type: String,
+      enum: Object.values(SOURCES),
+      default: SOURCES.URL_HINT,
+    },
+    confidence: {
+      type: String,
+      enum: Object.values(CONFIDENCE),
+      default: CONFIDENCE.PROBABLE,
+    },
+    success: { type: Boolean, default: false },
+    error: { type: String, default: '', trim: true },
+  },
+  { _id: false }
+)
+
 const MessageSchema = new Schema(
   {
     chatId: { type: Schema.Types.ObjectId, required: true, index: true },
@@ -53,6 +93,7 @@ const MessageSchema = new Schema(
     preview: { type: String, default: '' },
 
     attachments: { type: [AttachmentSchema], default: [] },
+    sharedResources: { type: [SharedResourceSchema], default: [] },
     replyTo: { type: ReplyToSchema, default: null },
     mentions: { type: [String], default: [] },
     reactions: { type: [ReactionSchema], default: [] },

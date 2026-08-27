@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import { Conversation } from './model.conversation.js'
 import { Message } from './model.message.js'
 import { encryptText, decryptText } from './crypto.message.js'
+import { resolveSharedResourcesFromText } from '../sharedResources/resolver.js'
 
 const ALLOWED_REACTION_EMOJIS = [
   '👍',
@@ -84,6 +85,17 @@ function buildMessagePreview({ text = '', attachments = [] } = {}) {
     return name ? `Adjunto: ${name}` : 'Adjunto'
   }
   return `${files.length} adjuntos`
+}
+
+async function resolveMessageSharedResources(text) {
+  try {
+    return await resolveSharedResourcesFromText(text)
+  } catch (error) {
+    console.warn('shared-resource:chat-resolution-failed', {
+      error: error?.message || String(error || 'unknown'),
+    })
+    return []
+  }
 }
 
 function dayBounds(dateValue) {
@@ -377,6 +389,7 @@ export async function sendMessage({
   })
 
   const enc = encryptText(text)
+  const sharedResources = await resolveMessageSharedResources(text)
 
   const msg = await Message.create({
     chatId: new mongoose.Types.ObjectId(chatId),
@@ -384,6 +397,7 @@ export async function sendMessage({
     ...enc,
     preview,
     attachments: Array.isArray(attachments) ? attachments : [],
+    sharedResources,
     replyTo,
     mentions: mentionIds,
   })
@@ -434,6 +448,7 @@ export async function editMessage({ chatId, messageId, id_personal, text }) {
   }
 
   const enc = encryptText(cleanText)
+  const sharedResources = await resolveMessageSharedResources(cleanText)
   const preview = buildMessagePreview({
     text: cleanText,
     attachments: message.attachments,
@@ -446,6 +461,7 @@ export async function editMessage({ chatId, messageId, id_personal, text }) {
       $set: {
         ...enc,
         preview,
+        sharedResources,
         editedAt,
         editedBy: pid,
       },
