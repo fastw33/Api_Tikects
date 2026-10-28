@@ -177,7 +177,22 @@ export async function dispatchNotifications({
     }
   })
 
-  await Notification.insertMany(docs, { ordered: false })
+  const createdDocs = await Notification.insertMany(docs, { ordered: false })
+
+  const io = globalThis.__io
+  if (io) {
+    for (const notification of createdDocs) {
+      io.to(`user:${notification.to_id_personal}`).emit('notification:new', {
+        _id: notification._id,
+        type: notification.type,
+        title: notification.title,
+        body: notification.body,
+        target: notification.target,
+        meta: notification.meta,
+        createdAt: notification.createdAt,
+      })
+    }
+  }
 
   // Push (no bloqueante)
   let pushed = 0

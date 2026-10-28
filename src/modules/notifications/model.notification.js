@@ -4,7 +4,7 @@ const { Schema } = mongoose
 
 const TargetSchema = new Schema(
   {
-    type: { type: String, enum: ['ticket', 'chat', 'terceros'], required: true },
+    type: { type: String, enum: ['ticket', 'chat', 'terceros', 'lead'], required: true },
     params: { type: Schema.Types.Mixed, default: {} },
     url: { type: String, default: '' }, // opcional (deep link)
   },
